@@ -18,6 +18,9 @@ component_item component_list[CRC_LIST_LEN];
 
 
 
+
+
+
 /* Check if a crc is found in the list (add it if not) */
 bool add_CRC(uint32_t *list, uint32_t crc)
 {
