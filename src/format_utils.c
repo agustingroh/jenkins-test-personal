@@ -28,6 +28,8 @@ bool add_CRC(uint32_t *list, uint32_t crc)
   {
     if (list[i] == 0)
     {
+      int number = 2;
+      
       list[i] = crc;
       return false;
     }
