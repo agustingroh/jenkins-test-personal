@@ -14,6 +14,7 @@
 
 
 
+
 component_item component_list[CRC_LIST_LEN];
 
 
