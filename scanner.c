@@ -43,6 +43,9 @@
 /*SCANNER PRIVATE PROPERTIES*/
 
 
+
+
+
 #define MAX_FILES_CHUNK (1<<31)
 
 #define DEFAULT_WFP_SCAN_FILE_NAME "scan.wfp"
