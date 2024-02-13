@@ -21,7 +21,7 @@ pipeline {
     }
     agent any
       stages {
-        stage('Git Checkout') {
+        stage('SCANOSS') {
             steps {
 
 
@@ -55,6 +55,8 @@ pipeline {
                 script {
 
                     if (params.ENABLE_DELTA_ANALYSIS != true) return
+
+                    echo 'Delta Scan Analysis enabled'
 
                     // Parse the JSON payload
                     def payloadJson = readJSON text: env.payload
@@ -191,7 +193,7 @@ pipeline {
                  withCredentials([usernamePassword(credentialsId: 'jira-token',usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                     script {
 
-                        if(params.CREATE_JIRA_ISSUE != true &&  env.check_result == '0') return
+                        if(params.CREATE_JIRA_ISSUE == true &&  env.check_result == '0') return
 
                         def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
 
