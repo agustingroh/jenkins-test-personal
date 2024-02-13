@@ -54,7 +54,9 @@ pipeline {
 
                 script {
 
-                    if (params.ENABLE_DELTA_ANALYSIS == true) {
+                    echo "ENABLE_DELTA_ANALYSIS parameter value: ${params.ENABLE_DELTA_ANALYSIS}"
+
+                    if (params.ENABLE_DELTA_ANALYSIS == 'true') {
                     
 
                         echo 'Delta Scan Analysis enabled'
@@ -109,10 +111,10 @@ pipeline {
                                     sh "cp --parents ${sourcePath} ${destinationPath}"
 
                             }
+                        }
                     }
-                }
 
-            }
+                }
 
 
 
@@ -195,7 +197,7 @@ pipeline {
                  withCredentials([usernamePassword(credentialsId: 'jira-token',usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                     script {
 
-                        if (params.CREATE_JIRA_ISSUE == true &&  env.check_result == '0') {
+                        if (params.CREATE_JIRA_ISSUE == 'true' &&  env.check_result == '0') {
                         
 
                             echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"

@@ -28,9 +28,6 @@
 
 
 
-
-
-
 void spdx_open(FILE * output)
 {
 	fprintf(output,"{\n");
