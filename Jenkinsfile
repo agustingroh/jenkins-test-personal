@@ -166,6 +166,9 @@ pipeline {
                 }
 
 
+                /***** Upload Artifacts *****/
+
+                archiveArtifacts artifacts: 'scanoss-results.json', onlyIfSuccessful: true
 
 
                 /***** Analyze results *****/

@@ -114,6 +114,9 @@ export class Scanner extends EventEmitter {
       this.emit(ScannerEvents.WINNOWING_STATUS, newFilesProcessed)
     });
 
+
+    
+
     this.wfpProvider.on(ScannerEvents.WINNOWER_LOG, (msg) => {
       this.reportLog(msg);
     });
