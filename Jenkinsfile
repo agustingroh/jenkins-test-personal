@@ -6,7 +6,9 @@ pipeline {
         string(name: 'SCANOSS_SBOM_IDENTIFY', defaultValue:"sbom.json", description: 'SCANOSS SBOM Identify filename')
         
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
-        
+
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.9.0", description: 'SCANOSS CLI Docker Image')
+
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
@@ -19,20 +21,14 @@ pipeline {
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
         
     }
+    
     agent any
       stages {
         stage('SCANOSS') {
             steps {
 
-
-                script {
-                    // Delete the entire workspace
-                    deleteDir()
-                }
-
-
                 /****** Checkout repository ****/
-
+                
                 script {
                     dir('repository') {
                         git branch: 'main',
@@ -40,20 +36,6 @@ pipeline {
                             url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }                        
                 }
-
-
-              
-                /****** Set policies *****/
-
-                    //TODO: Remove credential when policies are public
-                withCredentials([string(credentialsId: 'policy-token' , variable: 'SCANOSS_POLICY_TOKEN')]) {
-                    script {
-                        def command = 'curl -H "Authorization: Bearer $SCANOSS_POLICY_TOKEN" --fail -L -o policy_check_script.js https://raw.githubusercontent.com/scanoss/jenkins-pipeline-example/main/copyleft-policy.js'
-                        echo command
-                        def response = sh(script: command, returnStdout: true).trim()
-                    }
-                }
-
 
 
                 /***** Delta *****/
@@ -152,15 +134,16 @@ pipeline {
                             }
                             
                             def CUSTOM_TOKEN = SCANOSS_API_TOKEN ? "--key ${SCANOSS_API_TOKEN}" : ''
-                        
-                  
-                          // Construct the command
-                            def command = "scanoss-py scan ${CUSTOM_URL} ${CUSTOM_TOKEN} ${SBOM_IDENTIFY} ${SBOM_IGNORE} --output ../scanoss-results.json ."
+
+
+                             // Construct the command
+                             def command = "scanoss-py scan ${CUSTOM_URL} ${CUSTOM_TOKEN} ${SBOM_IDENTIFY} ${SBOM_IGNORE} --output ../scanoss-results.json ."
 
                             // Run the Docker container with custom entry point
-                            docker.image('ghcr.io/scanoss/scanoss-py:v1.9.0').inside("--entrypoint=''"){
-                                sh(script: command, returnStdout: true).trim()                               
+                            docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside("--entrypoint=''"){
+                                sh(script: command, returnStdout: true).trim()
                             }
+
                         }
                     }
                 }
@@ -175,13 +158,10 @@ pipeline {
 
                 script {
                         try {
+                          sh 'echo "component,name,copyleft" > data.csv'
+                          sh 'jq -r \'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | [.key, .key, (.value | unique | length)] | @csv\' scanoss_results.json >> data.csv'
+                          sh 'cat data.csv'
 
-                             docker.image('node:20.11.0-alpine3.19').inside {
-                                env.check_result = sh(
-                                    returnStatus: true,
-                                    script: 'node policy_check_script.js'
-                                )                             
-                            }
                             
                             if (params.ABORT_ON_POLICY_FAILURE && check_result != '0') {
                                 currentBuild.result = "FAILURE"
