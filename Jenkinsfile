@@ -54,8 +54,6 @@ pipeline {
 
                 script {
 
-                    echo "ENABLE_DELTA_ANALYSIS parameter value: ${params.ENABLE_DELTA_ANALYSIS}"
-
                     if (params.ENABLE_DELTA_ANALYSIS != true){
                          return
                     }     
@@ -197,7 +195,11 @@ pipeline {
                  withCredentials([usernamePassword(credentialsId: 'jira-token',usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                     script {
 
-                        if(params.CREATE_JIRA_ISSUE == true &&  env.check_result == '0') return
+                        if (params.CREATE_JIRA_ISSUE == true &&  env.check_result == '0') {
+                            return
+                        } 
+
+                        echo 'Creating Jira Issue'
 
                         def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
 
