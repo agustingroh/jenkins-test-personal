@@ -7,7 +7,7 @@ pipeline {
         
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
         
-        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')

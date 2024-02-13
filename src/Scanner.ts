@@ -116,7 +116,6 @@ export class Scanner extends EventEmitter {
 
 
     
-
     this.wfpProvider.on(ScannerEvents.WINNOWER_LOG, (msg) => {
       this.reportLog(msg);
     });
