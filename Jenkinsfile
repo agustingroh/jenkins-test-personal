@@ -7,7 +7,7 @@ pipeline {
         
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
         
-        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
@@ -54,65 +54,65 @@ pipeline {
 
                 script {
 
-                    if (params.ENABLE_DELTA_ANALYSIS != true){
-                         return
-                    }     
+                    if (params.ENABLE_DELTA_ANALYSIS == true) {
+                    
 
-                    echo 'Delta Scan Analysis enabled'
+                        echo 'Delta Scan Analysis enabled'
 
-                    // Parse the JSON payload
-                    def payloadJson = readJSON text: env.payload
+                        // Parse the JSON payload
+                        def payloadJson = readJSON text: env.payload
 
-                    def commits = payloadJson.commits
+                        def commits = payloadJson.commits
 
-                    // Define the destination folder
-                    def destinationFolder = "${env.WORKSPACE}/delta"
+                        // Define the destination folder
+                        def destinationFolder = "${env.WORKSPACE}/delta"
 
-                     // Define a set to store unique file names
-                    def uniqueFileNames = new HashSet()
+                        // Define a set to store unique file names
+                        def uniqueFileNames = new HashSet()
 
-                    // Remove the destination folder if it exists
-                    sh "rm -rf ${destinationFolder}"
+                        // Remove the destination folder if it exists
+                        sh "rm -rf ${destinationFolder}"
 
-                     // Create the destination folder if it doesn't exist
-                    sh "mkdir -p ${destinationFolder}"
-
-
-                        // Iterate over each commit
-                        commits.each { commit ->
+                        // Create the destination folder if it doesn't exist
+                        sh "mkdir -p ${destinationFolder}"
 
 
-                            // Modified files
-                            commit.modified.each { fileName ->
-                                // Trim any leading or trailing whitespaces
-                                fileName = fileName.trim()
+                            // Iterate over each commit
+                            commits.each { commit ->
 
-                                uniqueFileNames.add(fileName)
+
+                                // Modified files
+                                commit.modified.each { fileName ->
+                                    // Trim any leading or trailing whitespaces
+                                    fileName = fileName.trim()
+
+                                    uniqueFileNames.add(fileName)
+                                }
+
+                                // New files added
+                                commit.added.each { fileName ->
+                                    // Trim any leading or trailing whitespaces
+                                    fileName = fileName.trim()
+
+                                    uniqueFileNames.add(fileName)
+
+                                }
                             }
+                        dir('repository'){
+                            uniqueFileNames.each { file ->
 
-                            // New files added
-                            commit.added.each { fileName ->
-                                 // Trim any leading or trailing whitespaces
-                                fileName = fileName.trim()
+                                // Construct the source and destination paths
+                                        def sourcePath = "${file}"
+                                        def destinationPath = "${destinationFolder}"
 
-                                uniqueFileNames.add(fileName)
+                                        // Copy the file
+                                    sh "cp --parents ${sourcePath} ${destinationPath}"
 
                             }
-                        }
-                    dir('repository'){
-                        uniqueFileNames.each { file ->
-
-                               // Construct the source and destination paths
-                                    def sourcePath = "${file}"
-                                    def destinationPath = "${destinationFolder}"
-
-                                    // Copy the file
-                                   sh "cp --parents ${sourcePath} ${destinationPath}"
-
-                        }
                     }
-
                 }
+
+            }
 
 
 
@@ -196,31 +196,32 @@ pipeline {
                     script {
 
                         if (params.CREATE_JIRA_ISSUE == true &&  env.check_result == '0') {
-                            return
-                        } 
+                        
 
-                        echo 'Creating Jira Issue'
+                            echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
+                        
 
-                        def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
+                            def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
 
-                        copyLeft = copyLeft +  "\n${BUILD_URL}"
+                            copyLeft = copyLeft +  "\n${BUILD_URL}"
 
-                        def JSON_PAYLOAD =  [
-                             fields : [
-                                project : [
-                                    key: params.JIRA_PROJECT_KEY
-                                ],
-                                summary : 'Components with Copyleft licenses found',
-                                description: copyLeft,
-                                issuetype: [
-                                    name: 'Bug'
+                            def JSON_PAYLOAD =  [
+                                fields : [
+                                    project : [
+                                        key: params.JIRA_PROJECT_KEY
+                                    ],
+                                    summary : 'Components with Copyleft licenses found',
+                                    description: copyLeft,
+                                    issuetype: [
+                                        name: 'Bug'
+                                    ]
                                 ]
                             ]
-                        ]
 
-                        def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
+                            def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
 
-                        createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
+                            createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
+                        }
                     }
                 }
 
