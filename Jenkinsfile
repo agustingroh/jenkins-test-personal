@@ -25,6 +25,12 @@ pipeline {
             steps {
 
 
+                script {
+                    // Delete the entire workspace
+                    deleteDir()
+                }
+
+
                 /****** Checkout repository ****/
 
                 script {
