@@ -54,7 +54,11 @@ pipeline {
 
                 script {
 
-                    if (params.ENABLE_DELTA_ANALYSIS != true) return
+                    echo "ENABLE_DELTA_ANALYSIS parameter value: ${params.ENABLE_DELTA_ANALYSIS}"
+
+                    if (params.ENABLE_DELTA_ANALYSIS != true){
+                         return
+                    }     
 
                     echo 'Delta Scan Analysis enabled'
 
