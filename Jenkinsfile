@@ -1,5 +1,9 @@
 pipeline {
     parameters {
+
+        // REPOSITORY variables
+        string(name: 'GITHUB_TOKEN_ID', defaultValue:"gh-token", description: 'Github repository token credential id')
+
         // SCAN Variables
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
         
@@ -12,15 +16,19 @@ pipeline {
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
+
+        string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
+
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
         
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
                 
-        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
+        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: true, description: 'Enable Jira reporting')
         
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
-        
     }
+
+
     agent any
       stages {
         stage('SCANOSS') {
@@ -42,7 +50,7 @@ pipeline {
                 script {
                     dir('repository') {
                         git branch: 'main',
-                            credentialsId: 'gh-token',
+                            credentialsId: params.GITHUB_TOKEN_ID,
                             url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }                        
                 }
@@ -51,8 +59,6 @@ pipeline {
                 /***** Delta *****/
 
                 script {
-
-                    echo "ENABLE_DELTA_ANALYSIS parameter value: ${params.ENABLE_DELTA_ANALYSIS.getClass()}"
 
                     if (params.ENABLE_DELTA_ANALYSIS == true) {
                     
@@ -158,17 +164,15 @@ pipeline {
                         try {
 
 
-                          sh 'ls -la'
                           sh 'echo "component,name,copyleft" > data.csv'
-                          sh 'jq -r \'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | [.key, .key, (.value | unique | length)] | @csv\' scanoss-results.json >> data.csv'
+                          sh ''' jq -r 'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' scanoss-results.json >> data.csv'''
 
+                          env.check_result = sh(script: 'result=$(if [ $(wc -l < data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi); echo $result', returnStdout: true).trim()
+                          sh 'echo CHECK RESULT: ${check_result}'
 
-
-
-                            
-                            if (params.ABORT_ON_POLICY_FAILURE && check_result != '0') {
-                                currentBuild.result = "FAILURE"
-                            }
+                          if (params.ABORT_ON_POLICY_FAILURE && env.check_result != '0') {
+                            currentBuild.result = "FAILURE"
+                          }
 
                         } catch(e) {
                             echo e.getMessage()
@@ -186,10 +190,12 @@ pipeline {
 
                 /***** Jira issue *****/
 
-                 withCredentials([usernamePassword(credentialsId: 'jira-token',usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                 withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                     script {
 
-                        if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result == '0')) {
+                        if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != '0')) {
+
+                            sh 'apt update && apt install curl -y'
                         
 
                             echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
