@@ -7,7 +7,7 @@ pipeline {
         
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
 
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.9.0", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/agustingroh/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
         
@@ -25,7 +25,18 @@ pipeline {
     agent any
       stages {
         stage('SCANOSS') {
-            steps {
+
+         agent {
+            docker {
+                image params.SCANOSS_CLI_DOCKER_IMAGE
+                args '--entrypoint='
+                // Run the container on the node specified at the
+                // top-level of the Pipeline, in the same workspace,
+                // rather than on a new node entirely:
+                reuseNode true
+            }
+        }
+          steps {
 
                 /****** Checkout repository ****/
                 
@@ -115,34 +126,22 @@ pipeline {
                 withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID , variable: 'SCANOSS_API_TOKEN')]) {
                     dir("${SCAN_FOLDER}") {
                         script {
-                            env.SCAN_FOLDER = params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository'
-                            
-                                                     // Define environment variables
-                            def SBOM_IDENTIFY = ''
-                            if (fileExists(SCANOSS_SBOM_IDENTIFY)) {
-                                SBOM_IDENTIFY = "--identify ${SCANOSS_SBOM_IDENTIFY}"
-                            }
-                        
-                            def SBOM_IGNORE = ''
-                            if (fileExists(SCANOSS_SBOM_IGNORE)) {
-                                SBOM_IGNORE = "--ignore ${SCANOSS_SBOM_IGNORE}"
-                            }
-                        
-                            def CUSTOM_URL = ''
-                            if (params.SCANOSS_API_URL) {                        
-                                CUSTOM_URL = "--apiurl ${SCANOSS_API_URL}" 
-                            }
-                            
-                            def CUSTOM_TOKEN = SCANOSS_API_TOKEN ? "--key ${SCANOSS_API_TOKEN}" : ''
+                             sh '''
+                                 SBOM_IDENTIFY=""
+                                 if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
+
+                                 SBOM_IGNORE=""
+                                 if [ -f $SCANOSS_SBOM_IGNORE ]; then SBOM_IGNORE="--ignore $SCANOSS_SBOM_IGNORE" ; fi
+
+                                 CUSTOM_URL=""
+                                 if [ ! -z $SCANOSS_API_URL ]; then CUSTOM_URL="--apiurl $SCANOSS_API_URL"; else CUSTOM_URL="--apiurl https://osskb.org/api/scan/direct" ; fi
+
+                                 CUSTOM_TOKEN=""
+                                 if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
 
 
-                             // Construct the command
-                             def command = "scanoss-py scan ${CUSTOM_URL} ${CUSTOM_TOKEN} ${SBOM_IDENTIFY} ${SBOM_IGNORE} --output ../scanoss-results.json ."
-
-                            // Run the Docker container with custom entry point
-                            docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside("--entrypoint=''"){
-                                sh(script: command, returnStdout: true).trim()
-                            }
+                                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
+                            '''
 
                         }
                     }
@@ -158,9 +157,14 @@ pipeline {
 
                 script {
                         try {
+
+
+
                           sh 'echo "component,name,copyleft" > data.csv'
                           sh 'jq -r \'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | [.key, .key, (.value | unique | length)] | @csv\' scanoss_results.json >> data.csv'
-                          sh 'cat data.csv'
+
+
+
 
                             
                             if (params.ABORT_ON_POLICY_FAILURE && check_result != '0') {
