@@ -9,7 +9,7 @@ pipeline {
 
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/agustingroh/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
-        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
@@ -158,9 +158,9 @@ pipeline {
                         try {
 
 
-
+                          sh 'ls -la'
                           sh 'echo "component,name,copyleft" > data.csv'
-                          sh 'jq -r \'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | [.key, .key, (.value | unique | length)] | @csv\' scanoss_results.json >> data.csv'
+                          sh 'jq -r \'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | [.key, .key, (.value | unique | length)] | @csv\' scanoss-results.json >> data.csv'
 
 
 
