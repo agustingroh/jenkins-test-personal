@@ -13,7 +13,7 @@ pipeline {
 
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/agustingroh/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
-        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
         
         // JIRA Variables
 
@@ -27,7 +27,6 @@ pipeline {
         
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
-
 
     agent any
       stages {
@@ -44,6 +43,10 @@ pipeline {
             }
         }
           steps {
+
+                echo "${env.payload}"
+                echo "BRANCH NAME ${env.BRANCH_NAME}"
+                echo "CHANGE ID ${env.CHANGE_ID}"
 
                 /****** Checkout repository ****/
                 
