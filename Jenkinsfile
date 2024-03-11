@@ -31,6 +31,13 @@ pipeline {
     agent any
       stages {
         stage('SCANOSS') {
+         when {
+            expression {
+                // Only run the pipeline if commits are done on the main branch
+                def payload = readJSON text: "${env.payload}"
+                return payload.ref == 'refs/heads/main' && payload.commits.size() > 0
+            }
+         }
 
          agent {
             docker {
