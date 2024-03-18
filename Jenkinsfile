@@ -35,13 +35,10 @@ pipeline {
             expression {
                def payload = readJSON text: "${env.payload}"
 
-               echo "Payload ${payload}"
+                echo "REF ${payload.ref}""
 
-               // Check if the event is a push event to the main branch
-               def isPushToMainBranch = env.BRANCH_NAME == 'main' && (env.CHANGE_ID != null || payload.after != null)
+               return payload.ref == 'refs/heads/main'
 
-               // The payload.commits.size() is used to verify that there are commits associated with the push event.
-               return isPushToMainBranch && payload.commits.size() > 0
 
             }
          }
