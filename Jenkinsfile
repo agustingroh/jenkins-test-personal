@@ -35,6 +35,10 @@ pipeline {
             expression {
                def payload = readJSON text: "${env.payload}"
 
+                echo "payload ${payload}"
+
+                echo "action ${payload.action}"
+
                 echo "REF ${payload.ref}"
 
                return payload.ref == 'refs/heads/main'
