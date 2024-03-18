@@ -41,7 +41,6 @@ pipeline {
 
                 echo "REF ${payload.ref}"
 
-
                 return payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
 
             }
