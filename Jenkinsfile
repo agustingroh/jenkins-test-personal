@@ -38,6 +38,10 @@ pipeline {
                 // Check if the event is a push event to the main branch
                 def isPushToMainBranch = {
                     def event = currentBuild.rawBuild.getCauses().find { it.class.toString().contains('GitHubPushCause') }
+
+                     echo "Event class: ${event?.class}"
+                        echo "Branch name: ${event?.getBranchName()}"
+
                     return event && event.getBranchName() == 'main'
                 }
 
