@@ -33,16 +33,13 @@ pipeline {
         stage('SCANOSS') {
          when {
             expression {
-                // Only run the pipeline if commits are done on the main branch
+               def payload = readJSON text: "${env.payload}"
 
-                // Check if the event is a push event to the main branch
-                def isPushToMainBranch = {
-                    def event = currentBuild.rawBuild.getCauses().find { it.class.toString().contains('GitHubPushCause') }
-                    return event && event.getBranchName() == 'main'
-                }
+               // Check if the event is a push event to the main branch
+               def isPushToMainBranch = env.BRANCH_NAME == 'main' && (env.CHANGE_ID != null || payload.after != null)
 
-                // The payload.commits.size() is used to verify that there are commits associated with the push event.
-                return isPushToMainBranch() && payload.commits.size() > 0
+               // The payload.commits.size() is used to verify that there are commits associated with the push event.
+               return isPushToMainBranch && payload.commits.size() > 0
 
             }
          }
