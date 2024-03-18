@@ -41,7 +41,8 @@ pipeline {
 
                 echo "REF ${payload.ref}"
 
-               return payload.ref == 'refs/heads/main'
+
+                return payload.pull_request !=  null && payload.pull_request.base.ref == 'main'
 
 
             }
