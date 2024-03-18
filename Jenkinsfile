@@ -43,7 +43,6 @@ pipeline {
 
                return payload.ref == 'refs/heads/main'
 
-
             }
          }
 
