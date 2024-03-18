@@ -11,7 +11,7 @@ pipeline {
         
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
 
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/agustingroh/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
         
@@ -34,8 +34,16 @@ pipeline {
          when {
             expression {
                 // Only run the pipeline if commits are done on the main branch
-                def payload = readJSON text: "${env.payload}"
-                return payload.ref == 'refs/heads/main' && payload.commits.size() > 0
+
+                // Check if the event is a push event to the main branch
+                def isPushToMainBranch = {
+                    def event = currentBuild.rawBuild.getCauses().find { it.class.toString().contains('GitHubPushCause') }
+                    return event && event.getBranchName() == 'main'
+                }
+
+                // The payload.commits.size() is used to verify that there are commits associated with the push event.
+                return isPushToMainBranch() && payload.commits.size() > 0
+
             }
          }
 
