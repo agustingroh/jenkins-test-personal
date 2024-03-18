@@ -35,6 +35,8 @@ pipeline {
             expression {
                def payload = readJSON text: "${env.payload}"
 
+               echo "Payload ${payload}"
+
                // Check if the event is a push event to the main branch
                def isPushToMainBranch = env.BRANCH_NAME == 'main' && (env.CHANGE_ID != null || payload.after != null)
 
