@@ -52,6 +52,16 @@ pipeline {
 
                /****** Checkout repository ****/
                 script {
+
+                     def randomString = generateRandomString(32) // Generating a 32-character random string
+                     echo "Random String generated: ${randomString}"
+                     env.project_id = randomString
+
+                     echo "PROJECT ID, ${env.project_id}"
+
+
+
+
                     dir('repository') {
                         git branch: 'main',
                             credentialsId: params.GITHUB_TOKEN_ID,
@@ -123,9 +133,8 @@ def publishReport() {
 
 def copyleft() {
     try {
-
           sh 'echo "component,name,copyleft" > data.csv'
-          sh ''' jq -r 'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' scanoss-results.json >> data.csv'''
+          sh ''' jq -r 'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${project_id}/scanoss-results.json >> data.csv'''
 
           env.check_result = sh(script: 'result=$(if [ $(wc -l < data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi); echo $result', returnStdout: true).trim()
           sh 'echo CHECK RESULT: ${check_result}'
@@ -143,7 +152,7 @@ def copyleft() {
 }
 
 def uploadArtifacts() {
-  archiveArtifacts artifacts: 'scanoss-results.json', onlyIfSuccessful: true
+  archiveArtifacts artifacts: '${project_id}/scanoss-results.json', onlyIfSuccessful: true
 }
 
 def scan() {
@@ -151,6 +160,9 @@ def scan() {
     dir("${SCAN_FOLDER}") {
         script {
              sh '''
+
+                sh "mkdir -p ${project_id}"
+
                  SBOM_IDENTIFY=""
                  if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
 
@@ -164,7 +176,7 @@ def scan() {
                  if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
 
 
-                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
+                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../${project_id}/scanoss-results.json .
             '''
 
         }
@@ -252,5 +264,16 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
     } catch (Exception e) {
         echo e
     }
+}
+
+def generateRandomString(int length) {
+    def characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    def randomString = ''
+
+    length.times {
+        randomString += characters[(int)(Math.random() * characters.length())]
+    }
+
+    return randomString
 }
 
