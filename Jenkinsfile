@@ -161,7 +161,7 @@ def scan() {
         script {
              sh '''
 
-                sh "mkdir -p ${project_id}"
+                mkdir -p ${project_id}
 
                  SBOM_IDENTIFY=""
                  if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
