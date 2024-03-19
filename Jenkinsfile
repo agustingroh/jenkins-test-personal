@@ -59,6 +59,8 @@ pipeline {
 
                      echo "PROJECT ID, ${env.project_id}"
 
+                     sh 'mkdir -p {env.project_id}'
+
 
 
 
@@ -161,7 +163,6 @@ def scan() {
         script {
              sh '''
 
-                mkdir -p ${project_id}
 
                  SBOM_IDENTIFY=""
                  if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
