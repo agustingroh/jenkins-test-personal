@@ -19,9 +19,6 @@ import { WfpSplitter } from './WfpProvider/WfpSplitter/WfpSplitter';
 import sortPaths from 'sort-paths';
 import { v4 as uuidv4 } from 'uuid';
 
-
-
-
 let finishPromiseResolve;
 let finishPromiseReject;
 

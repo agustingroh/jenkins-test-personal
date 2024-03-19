@@ -55,7 +55,7 @@ pipeline {
                     dir('repository') {
                         git branch: 'main',
                             credentialsId: params.GITHUB_TOKEN_ID,
-                            url: 'https://github.com/agistingroh/jenkins-test-personal'
+                            url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }
 
                     /***** Delta *****/
