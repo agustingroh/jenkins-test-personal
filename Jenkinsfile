@@ -6,46 +6,37 @@ pipeline {
 
         // SCAN Variables
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        
+
         string(name: 'SCANOSS_SBOM_IDENTIFY', defaultValue:"sbom.json", description: 'SCANOSS SBOM Identify filename')
-        
+
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
 
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
-        
+
         // JIRA Variables
 
         string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
 
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
-        
+
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
-                
+
         booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: true, description: 'Enable Jira reporting')
-        
+
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
-
     agent any
       stages {
         stage('SCANOSS') {
-         when {
-            expression {
-               def payload = readJSON text: "${env.payload}"
+            when {
+                expression {
+                     def payload = readJSON text: "${env.payload}"
 
-                echo "payload ${payload}"
-
-                echo "action ${payload.action}"
-
-                echo "REF ${payload.ref}"
-
-
-                return payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'closed'
-
+                     return payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
+                }
             }
-         }
 
          agent {
             docker {
@@ -59,24 +50,16 @@ pipeline {
         }
           steps {
 
-                echo "${env.payload}"
-                echo "BRANCH NAME ${env.BRANCH_NAME}"
-                echo "CHANGE ID ${env.CHANGE_ID}"
-
-                /****** Checkout repository ****/
-                
+               /****** Checkout repository ****/
                 script {
-
                     dir('repository') {
                         git branch: 'main',
                             credentialsId: params.GITHUB_TOKEN_ID,
-                            url: 'https://github.com/agustingroh/jenkins-test-personal'
+                            url: 'https://github.com/agistingroh/jenkins-test-personal'
                     }
-
 
                     /***** Delta *****/
                     deltaScan()
-
 
                     /***** Scan *****/
                     env.SCAN_FOLDER = params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository'
@@ -94,48 +77,45 @@ pipeline {
 
                     /***** Jira issue *****/
 
-                     withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                        script {
+                             withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                                script {
 
-                            if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != '0')) {
-
-                                sh 'apt update && apt install curl -y'
+                                    if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != '0')) {
 
 
-                                echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
+                                        echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
 
 
-                                def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
+                                        def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
 
-                                copyLeft = copyLeft +  "\n${BUILD_URL}"
+                                        copyLeft = copyLeft +  "\n${BUILD_URL}"
 
-                                def JSON_PAYLOAD =  [
-                                    fields : [
-                                        project : [
-                                            key: params.JIRA_PROJECT_KEY
-                                        ],
-                                        summary : 'Components with Copyleft licenses found',
-                                        description: copyLeft,
-                                        issuetype: [
-                                            name: 'Bug'
+                                        def JSON_PAYLOAD =  [
+                                            fields : [
+                                                project : [
+                                                    key: params.JIRA_PROJECT_KEY
+                                                ],
+                                                summary : 'Components with Copyleft licenses found',
+                                                description: copyLeft,
+                                                issuetype: [
+                                                    name: 'Bug'
+                                                ]
+                                            ]
                                         ]
-                                    ]
-                                ]
 
-                                def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
+                                        def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
 
-                                createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
+                                        createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
+                                    }
+                                }
                             }
-                        }
-                    }
 
                 }
-             
             }
-        }   
-          
+        }
     }
 }
+
 
 def publishReport() {
      publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "data.csv")
@@ -143,6 +123,7 @@ def publishReport() {
 
 def copyleft() {
     try {
+
           sh 'echo "component,name,copyleft" > data.csv'
           sh ''' jq -r 'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' scanoss-results.json >> data.csv'''
 
@@ -272,4 +253,4 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
         echo e
     }
 }
- 
+
