@@ -11,7 +11,7 @@ pipeline {
 
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
 
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.11.1", description: 'SCANOSS CLI Docker Image')
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
 
@@ -23,7 +23,7 @@ pipeline {
 
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
 
-        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: true, description: 'Enable Jira reporting')
+        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
 
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
@@ -53,13 +53,13 @@ pipeline {
                /****** Checkout repository ****/
                 script {
 
-                     def randomString = generateRandomString(32) // Generating a 32-character random string
-                     echo "Random String generated: ${randomString}"
-                     env.project_id = randomString
+                     def id = generateRandomString(32) // Generating a 32-character random string
+                     echo "Random String generated: ${id}"
+                     env.scan_results_path = "scans/${id}"
 
-                     echo "PROJECT ID, ${env.project_id}"
+                     echo "SCAN RESULT FOLDER PATH, ${env.scan_results_path}"
 
-                     sh 'mkdir -p {env.project_id}'
+                     sh "mkdir -p ${env.scan_results_path}"
 
 
 
@@ -76,6 +76,7 @@ pipeline {
                     /***** Scan *****/
                     env.SCAN_FOLDER = params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository'
                     scan()
+
 
                     /***** Upload Artifacts *****/
                     uploadArtifacts()
@@ -130,13 +131,13 @@ pipeline {
 
 
 def publishReport() {
-     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "data.csv")
+     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.scan_results_path}/data.csv")
 }
 
 def copyleft() {
     try {
-          sh 'echo "component,name,copyleft" > data.csv'
-          sh ''' jq -r 'reduce .[]?[] as $item ({}; select($item.purl) | .[$item.purl[0] + "@" + $item.version] += [$item.licenses[]? | select(.copyleft == "yes") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${project_id}/scanoss-results.json >> data.csv'''
+          sh "echo 'component,name,copyleft' > ${env.scan_results_path}/data.csv"
+          sh "jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${env.scan_results_path}/scanoss-results.json >> ${env.scan_results_path}/data.csv"
 
           env.check_result = sh(script: 'result=$(if [ $(wc -l < data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi); echo $result', returnStdout: true).trim()
           sh 'echo CHECK RESULT: ${check_result}'
@@ -154,7 +155,8 @@ def copyleft() {
 }
 
 def uploadArtifacts() {
-  archiveArtifacts artifacts: '${project_id}/scanoss-results.json', onlyIfSuccessful: true
+  def folder = "${env.scan_results_path}/scanoss-results.json"
+    archiveArtifacts artifacts: folder, onlyIfSuccessful: true
 }
 
 def scan() {
@@ -162,8 +164,6 @@ def scan() {
     dir("${SCAN_FOLDER}") {
         script {
              sh '''
-
-
                  SBOM_IDENTIFY=""
                  if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
 
@@ -177,9 +177,10 @@ def scan() {
                  if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
 
 
-                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../${project_id}/scanoss-results.json .
-            '''
+                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
 
+                '''
+             sh "cp ../scanoss-results.json ${env.WORKSPACE}/${env.scan_results_path}/scanoss-results.json"
         }
     }
   }
