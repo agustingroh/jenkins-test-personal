@@ -23,7 +23,7 @@ pipeline {
 
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
 
-        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
+        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: true, description: 'Enable Jira reporting')
 
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
@@ -52,19 +52,16 @@ pipeline {
 
                /****** Checkout repository ****/
                 script {
+                  
+                     env.BUILD_RESOURCE_PATH = "scans/scanoss-${currentBuild.number}"
+                     sh "mkdir -p ${env.BUILD_RESOURCE_PATH}"
 
-                     def id = generateRandomString(32) // Generating a 32-character random string
-                     echo "Random String generated: ${id}"
-                     env.scan_results_path = "scans/${id}"
-
-                     echo "SCAN RESULT FOLDER PATH, ${env.scan_results_path}"
-
-                     sh "mkdir -p ${env.scan_results_path}"
-
-                     echo "BUILD NUMBER ${currentBuild.number}"
-
-
-
+                    def payloadJson = readJSON text: env.payload
+                    env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
+                    env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
+                    
+                    sh "echo  REPOSITORY NAME: ${payloadJson.pull_request.base.repo.name}"
+                    sh "echo  REPOSITORY URL: ${payloadJson.pull_request.base.repo.html_url}"
 
                     dir('repository') {
                         git branch: 'main',
@@ -103,14 +100,14 @@ pipeline {
 
                                         def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
 
-                                        copyLeft = copyLeft +  "\n${BUILD_URL}"
+                                        copyLeft = copyLeft +  "\n${BUILD_URL}\nSource repository:${env.REPOSITORY_URL}"
 
                                         def JSON_PAYLOAD =  [
                                             fields : [
                                                 project : [
                                                     key: params.JIRA_PROJECT_KEY
                                                 ],
-                                                summary : 'Components with Copyleft licenses found',
+                                                summary : "Components with Copyleft licenses found at ${env.REPOSITORY_NAME}",
                                                 description: copyLeft,
                                                 issuetype: [
                                                     name: 'Bug'
@@ -133,18 +130,21 @@ pipeline {
 
 
 def publishReport() {
-     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.scan_results_path}/data.csv")
+     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.BUILD_RESOURCE_PATH}/data.csv")
 }
 
 def copyleft() {
     try {
-          sh "echo 'component,name,copyleft' > ${env.scan_results_path}/data.csv"
-          sh "jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${env.scan_results_path}/scanoss-results.json >> ${env.scan_results_path}/data.csv"
+        def check_result = sh (returnStdout: true, script: '''
+            echo 'component,name,copyleft' > $BUILD_RESOURCE_PATH/data.csv
 
-          env.check_result = sh(script: 'result=$(if [ $(wc -l < data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi); echo $result', returnStdout: true).trim()
-          sh 'echo CHECK RESULT: ${check_result}'
+            jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' $BUILD_RESOURCE_PATH/scanoss-results.json >> $BUILD_RESOURCE_PATH/data.csv
+            
+            check_result=$(if [ $(wc -l < $BUILD_RESOURCE_PATH/data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi);
+            echo \$check_result
+         ''')
 
-          if (params.ABORT_ON_POLICY_FAILURE && env.check_result != '0') {
+          if (params.ABORT_ON_POLICY_FAILURE && check_result != '0') {
             currentBuild.result = "FAILURE"
           }
 
@@ -157,7 +157,7 @@ def copyleft() {
 }
 
 def uploadArtifacts() {
-  def folder = "${env.scan_results_path}/scanoss-results.json"
+  def folder = "${env.BUILD_RESOURCE_PATH}/scanoss-results.json"
     archiveArtifacts artifacts: folder, onlyIfSuccessful: true
 }
 
@@ -181,8 +181,10 @@ def scan() {
 
                  scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
 
+
+                 cp ../scanoss-results.json $WORKSPACE/$BUILD_RESOURCE_PATH/scanoss-results.json
                 '''
-             sh "cp ../scanoss-results.json ${env.WORKSPACE}/${env.scan_results_path}/scanoss-results.json"
+             
         }
     }
   }
@@ -270,14 +272,5 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
     }
 }
 
-def generateRandomString(int length) {
-    def characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    def randomString = ''
 
-    length.times {
-        randomString += characters[(int)(Math.random() * characters.length())]
-    }
-
-    return randomString
-}
 
