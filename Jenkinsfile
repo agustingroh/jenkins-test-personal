@@ -52,16 +52,10 @@ pipeline {
 
                /****** Checkout repository ****/
                 script {
+                  
+                     env.BUILD_RESOURCE_PATH = "scans/scanoss-${currentBuild.number}"
+                     sh "mkdir -p ${env.BUILD_RESOURCE_PATH}"
 
-                     def id = generateRandomString(32) // Generating a 32-character random string
-                     echo "Random String generated: ${id}"
-                     env.scan_results_path = "scans/${id}"
-
-                     echo "SCAN RESULT FOLDER PATH, ${env.scan_results_path}"
-
-                     sh "mkdir -p ${env.scan_results_path}"
-
-                     echo "BUILD NUMBER ${currentBuild.number}"
 
 
 
@@ -133,13 +127,13 @@ pipeline {
 
 
 def publishReport() {
-     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.scan_results_path}/data.csv")
+     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.BUILD_RESOURCE_PATH}/data.csv")
 }
 
 def copyleft() {
     try {
-          sh "echo 'component,name,copyleft' > ${env.scan_results_path}/data.csv"
-          sh "jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${env.scan_results_path}/scanoss-results.json >> ${env.scan_results_path}/data.csv"
+          sh "echo 'component,name,copyleft' > ${env.BUILD_RESOURCE_PATH}/data.csv"
+          sh "jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' ${env.BUILD_RESOURCE_PATH}/scanoss-results.json >> ${env.BUILD_RESOURCE_PATH}/data.csv"
 
           env.check_result = sh(script: 'result=$(if [ $(wc -l < data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi); echo $result', returnStdout: true).trim()
           sh 'echo CHECK RESULT: ${check_result}'
@@ -157,7 +151,7 @@ def copyleft() {
 }
 
 def uploadArtifacts() {
-  def folder = "${env.scan_results_path}/scanoss-results.json"
+  def folder = "${env.BUILD_RESOURCE_PATH}/scanoss-results.json"
     archiveArtifacts artifacts: folder, onlyIfSuccessful: true
 }
 
@@ -182,7 +176,7 @@ def scan() {
                  scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
 
                 '''
-             sh "cp ../scanoss-results.json ${env.WORKSPACE}/${env.scan_results_path}/scanoss-results.json"
+             sh "cp ../scanoss-results.json ${env.WORKSPACE}/${env.BUILD_RESOURCE_PATH}/scanoss-results.json"
         }
     }
   }
@@ -270,14 +264,5 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
     }
 }
 
-def generateRandomString(int length) {
-    def characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    def randomString = ''
 
-    length.times {
-        randomString += characters[(int)(Math.random() * characters.length())]
-    }
-
-    return randomString
-}
 
