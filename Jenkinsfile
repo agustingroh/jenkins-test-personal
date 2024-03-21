@@ -61,6 +61,8 @@ pipeline {
 
                      sh "mkdir -p ${env.scan_results_path}"
 
+                     echo "BUILD NUMBER ${env.BULD_NUMBER}"
+
 
 
 
