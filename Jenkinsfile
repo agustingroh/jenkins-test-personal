@@ -11,7 +11,7 @@ pipeline {
 
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
 
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.11.1", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:latest", description: 'SCANOSS CLI Docker Image')
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
 
@@ -48,79 +48,109 @@ pipeline {
                 reuseNode true
             }
         }
-          steps {
-
-               /****** Checkout repository ****/
+          steps {               
                 script {
-                  
-                     env.BUILD_RESOURCE_PATH = "scans/scanoss-${currentBuild.number}"
-                     sh "mkdir -p ${env.BUILD_RESOURCE_PATH}"
+                    
+                    /***** File names *****/
+                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
+                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
+                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
+                   
 
+                    
+                    /****** Create Resources folder ******/
+                    env.SCANOSS_BUILD_BASE_PATH = "scanoss/${currentBuild.number}"
+                    sh '''
+                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/reports
+                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/repository
+                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/delta
+                     '''
+                    env.SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
+
+
+                    /***** Resources Paths *****/
+                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
+                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
+                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
+
+
+
+
+                    /****** Get Repository name and repo URL from payload ******/
                     def payloadJson = readJSON text: env.payload
                     env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
                     env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
-                    
-                    sh "echo  REPOSITORY NAME: ${payloadJson.pull_request.base.repo.name}"
-                    sh "echo  REPOSITORY URL: ${payloadJson.pull_request.base.repo.html_url}"
 
-                    dir('repository') {
+
+                    /****** Checkout repository ******/
+                    dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
                         git branch: 'main',
                             credentialsId: params.GITHUB_TOKEN_ID,
                             url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }
 
+
                     /***** Delta *****/
                     deltaScan()
 
-                    /***** Scan *****/
-                    env.SCAN_FOLDER = params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository'
-                    scan()
 
+                    /***** Scan *****/
+                    env.SCAN_FOLDER = "${env.SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
+                    echo "SCAN FOLDER OUTSIDE ${env.SCAN_FOLDER}"
+                    scan()
 
                     /***** Upload Artifacts *****/
                     uploadArtifacts()
 
+
                     /**** Analyze results for copyleft ****/
                     copyleft()
+
 
                     /***** Publish report on Jenkins dashboard *****/
                     publishReport()
 
 
                     /***** Jira issue *****/
+                    withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                        script {
+                            echo "CHECK RESULT ${env.check_result}"
+                            echo "CHECK RESULT [${env.check_result}]"
+                            echo "Type of env.check_result: ${env.check_result.getClass()}"
 
-                             withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                script {
+                            def testVariable = env.check_result == '1'
 
-                                    if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != '0')) {
+                            echo "TEST VARIABLE ${testVariable}"
 
-
-                                        echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
+                            if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != 0)) {
 
 
-                                        def copyLeft = sh(script: "tail -n +2 data.csv | cut -d',' -f1", returnStdout: true)
+                                echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
 
-                                        copyLeft = copyLeft +  "\n${BUILD_URL}\nSource repository:${env.REPOSITORY_URL}"
 
-                                        def JSON_PAYLOAD =  [
-                                            fields : [
-                                                project : [
-                                                    key: params.JIRA_PROJECT_KEY
-                                                ],
-                                                summary : "Components with Copyleft licenses found at ${env.REPOSITORY_NAME}",
-                                                description: copyLeft,
-                                                issuetype: [
-                                                    name: 'Bug'
-                                                ]
-                                            ]
+                                def copyLeft = sh(script: "cat ${SCANOSS_COPYLEFT_FILE_PATH}", returnStdout: true)
+
+                                copyLeft = copyLeft +  "\nMore details can be found: ${BUILD_URL}\nSource repository: ${env.REPOSITORY_URL}"
+
+                                def JSON_PAYLOAD =  [
+                                    fields : [
+                                        project : [
+                                            key: params.JIRA_PROJECT_KEY
+                                        ],
+                                        summary : "Copyleft licenses found at ${env.REPOSITORY_NAME}",
+                                        description: copyLeft,
+                                        issuetype: [
+                                            name: 'Bug'
                                         ]
+                                    ]
+                                ]
 
-                                        def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
+                                def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
 
-                                        createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
-                                    }
-                                }
+                                createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
                             }
+                        }
+                    }
 
                 }
             }
@@ -130,21 +160,32 @@ pipeline {
 
 
 def publishReport() {
-     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.BUILD_RESOURCE_PATH}/data.csv")
+     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.SCANOSS_LICENSE_FILE_PATH}")
 }
 
 def copyleft() {
     try {
-        def check_result = sh (returnStdout: true, script: '''
-            echo 'component,name,copyleft' > $BUILD_RESOURCE_PATH/data.csv
 
-            jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' $BUILD_RESOURCE_PATH/scanoss-results.json >> $BUILD_RESOURCE_PATH/data.csv
+         env.check_result = sh (returnStdout: true, script: '''
+            echo 'component,name,copyleft' > $SCANOSS_LICENSE_FILE_PATH
+
+            jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' $SCANOSS_RESULTS_FILE_PATH >> $SCANOSS_LICENSE_FILE_PATH
             
-            check_result=$(if [ $(wc -l < $BUILD_RESOURCE_PATH/data.csv) -gt 1 ]; then echo "1"; else echo "0"; fi);
-            echo \$check_result
-         ''')
+            
+            printf '|| Component || Purl || Version || Licenses||\n' > $SCANOSS_COPYLEFT_FILE_PATH
+           
 
-          if (params.ABORT_ON_POLICY_FAILURE && check_result != '0') {
+           jq -r '[.[]?[] | select(.licenses) | select(.licenses[] | .copyleft? == \"yes\") | {component: .component, version: .version, purl: .purl[], licenses: (.licenses | map(.name) | join(\",\"))}] | unique_by(.purl) | sort_by(.component) | to_entries[] | "|\\(.value.component)|\\(.value.purl)|\\(.value.version)|\\(.value.licenses)|"'  $SCANOSS_RESULTS_FILE_PATH >> $SCANOSS_COPYLEFT_FILE_PATH
+
+
+            check_result=$(if [ $(wc -l < $SCANOSS_LICENSE_FILE_PATH) -gt 1 ]; then echo "1"; else echo "0"; fi);
+            echo \$check_result
+         ''').trim()
+
+
+         echo "CHECK RESULT ${env.check_result}"
+
+          if (params.ABORT_ON_POLICY_FAILURE && env.check_result != 0) {
             currentBuild.result = "FAILURE"
           }
 
@@ -156,16 +197,21 @@ def copyleft() {
     }
 }
 
-def uploadArtifacts() {
-  def folder = "${env.BUILD_RESOURCE_PATH}/scanoss-results.json"
-    archiveArtifacts artifacts: folder, onlyIfSuccessful: true
+
+ def uploadArtifacts() {
+  def scanossResultsPath = "${env.SCANOSS_RESULTS_FILE_PATH}"
+  archiveArtifacts artifacts: scanossResultsPath, onlyIfSuccessful: true
 }
+
 
 def scan() {
   withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID , variable: 'SCANOSS_API_TOKEN')]) {
-    dir("${SCAN_FOLDER}") {
+    dir("${env.SCAN_FOLDER}") {
         script {
              sh '''
+
+                 echo $(pwd)
+
                  SBOM_IDENTIFY=""
                  if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
 
@@ -179,12 +225,10 @@ def scan() {
                  if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
 
 
-                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output ../scanoss-results.json .
+                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output $WORKSPACE/$SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
 
-
-                 cp ../scanoss-results.json $WORKSPACE/$BUILD_RESOURCE_PATH/scanoss-results.json
                 '''
-             
+
         }
     }
   }
@@ -202,16 +246,10 @@ def deltaScan() {
                             def commits = payloadJson.commits
 
                             // Define the destination folder
-                            def destinationFolder = "${env.WORKSPACE}/delta"
+                            def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
 
                             // Define a set to store unique file names
                             def uniqueFileNames = new HashSet()
-
-                            // Remove the destination folder if it exists
-                            sh "rm -rf ${destinationFolder}"
-
-                            // Create the destination folder if it doesn't exist
-                            sh "mkdir -p ${destinationFolder}"
 
 
                                 // Iterate over each commit
@@ -235,7 +273,7 @@ def deltaScan() {
 
                                     }
                                 }
-                            dir('repository'){
+                            dir("${env.SCANOSS_BUILD_BASE_PATH}/repository"){
                                 uniqueFileNames.each { file ->
 
                                     // Construct the source and destination paths
@@ -252,7 +290,6 @@ def deltaScan() {
 
 
 def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
-
 
     env.TOKEN = jiraToken
     env.USER = jiraUsername
@@ -271,6 +308,4 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
         echo e
     }
 }
-
-
 
