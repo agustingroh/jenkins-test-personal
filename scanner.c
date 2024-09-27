@@ -85,6 +85,8 @@ static char *bin_to_hex(uint8_t *bin, uint32_t len)
     return out;
 }
 
+
+
 static char *read_file(char *path, long *length)
 {
     /* Read file into memory */
