@@ -66,6 +66,8 @@ const char EXCLUDED_EXTENSIONS[] = " .1, .2, .3, .4, .5, .6, .7, .8, .9, .ac, .a
 
 static int curl_request(int api_req, char* endpoint, char* data,scanner_object_t *s);
 
+
+
 /* Returns a hexadecimal representation of the first "len" bytes in "bin" */
 static char *bin_to_hex(uint8_t *bin, uint32_t len)
 {
