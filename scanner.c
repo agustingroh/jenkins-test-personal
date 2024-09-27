@@ -126,6 +126,8 @@ static bool scanner_is_file(char *path)
 }
 
 
+
+
 static void scanner_write_none_result(scanner_object_t *s, char * path)
 {
     fprintf(s->output, "\"%s\":[{\n\"id\":\"none\"\n}]\n,\n", path);
