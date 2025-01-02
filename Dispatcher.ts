@@ -35,6 +35,8 @@ export class Dispatcher extends EventEmitter {
 
   private queueMinLimitReached: boolean;
 
+
+
   private recoverableErrors;
 
   private proxyAgent: HttpsProxyAgent | HttpProxyAgent;
