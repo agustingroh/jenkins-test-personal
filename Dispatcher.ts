@@ -4,6 +4,7 @@ import EventEmitter from 'eventemitter3';
 import fetch, { Response } from 'node-fetch';
 import PQueue from "p-queue";
 
+
 import { ScannerEvents } from "../ScannerTypes";
 import { DispatcherResponse } from "./DispatcherResponse";
 import { ScannerCfg } from "../ScannerCfg";
