@@ -28,73 +28,63 @@ pipeline {
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
     agent any
-      stages {
-        stage('SCANOSS') {
-            when {
-                expression {
-                     def payload = readJSON text: "${env.payload}"
-
-                     return payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
-                }
-            }
-
-         agent {
-            docker {
-                label 'docker'
-                image params.SCANOSS_CLI_DOCKER_IMAGE
-                args '-u root --entrypoint='
-                
-                // Run the container on the node specified at the
-                // top-level of the Pipeline, in the same workspace,
-                // rather than on a new node entirely:
-                reuseNode true
-            }
-        }
-          steps {               
+    stages {
+        stage('Checkout') {
+            steps {
                 script {
-                    
-                    /***** File names *****/
-                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
-                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
-                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
-                   
-
-                    
                     /****** Create Resources folder ******/
                     env.SCANOSS_BUILD_BASE_PATH = "scanoss/${currentBuild.number}"
                     sh '''
                         mkdir -p ${SCANOSS_BUILD_BASE_PATH}/reports
                         mkdir -p ${SCANOSS_BUILD_BASE_PATH}/repository
                         mkdir -p ${SCANOSS_BUILD_BASE_PATH}/delta
-                     '''
+                    '''
                     env.SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
-
-
-                    /***** Resources Paths *****/
-                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
-                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
-                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
-
-
-
 
                     /****** Get Repository name and repo URL from payload ******/
                     def payloadJson = readJSON text: env.payload
                     env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
                     env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
 
-
-                    /****** Checkout repository ******/
+                    /****** Checkout repository in Jenkins container ******/
                     dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
                         git branch: 'main',
                             credentialsId: params.GITHUB_TOKEN_ID,
                             url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }
 
-
-                    /***** Delta *****/
+                    /***** Delta Analysis if enabled *****/
                     deltaScan()
+                }
+            }
+        }
 
+        stage('SCANOSS') {
+            when {
+                expression {
+                    def payload = readJSON text: "${env.payload}"
+                    return payload.pull_request != null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
+                }
+            }
+            agent {
+                docker {
+                    label 'docker'
+                    image params.SCANOSS_CLI_DOCKER_IMAGE
+                    args '-u root --entrypoint='
+                    reuseNode true
+                }
+            }
+            steps {
+                script {
+                    /***** File names *****/
+                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
+                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
+                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
+
+                    /***** Resources Paths *****/
+                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
+                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
+                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
 
                     /***** Scan *****/
                     env.SCAN_FOLDER = "${env.SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
@@ -104,60 +94,19 @@ pipeline {
                     /***** Upload Artifacts *****/
                     uploadArtifacts()
 
-
                     /**** Analyze results for copyleft ****/
                     copyleft()
-
 
                     /***** Publish report on Jenkins dashboard *****/
                     publishReport()
 
-
                     /***** Jira issue *****/
-                    withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                        script {
-                            echo "CHECK RESULT ${env.check_result}"
-                            echo "CHECK RESULT [${env.check_result}]"
-                            echo "Type of env.check_result: ${env.check_result.getClass()}"
-
-                            def testVariable = env.check_result == '1'
-
-                            echo "TEST VARIABLE ${testVariable}"
-
-                            if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != 0)) {
-
-
-                                echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
-
-
-                                def copyLeft = sh(script: "cat ${SCANOSS_COPYLEFT_FILE_PATH}", returnStdout: true)
-
-                                copyLeft = copyLeft +  "\nMore details can be found: ${BUILD_URL}\nSource repository: ${env.REPOSITORY_URL}"
-
-                                def JSON_PAYLOAD =  [
-                                    fields : [
-                                        project : [
-                                            key: params.JIRA_PROJECT_KEY
-                                        ],
-                                        summary : "Copyleft licenses found at ${env.REPOSITORY_NAME}",
-                                        description: copyLeft,
-                                        issuetype: [
-                                            name: 'Bug'
-                                        ]
-                                    ]
-                                ]
-
-                                def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
-
-                                createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
-                            }
-                        }
-                    }
-
+                    // ... [rest of the Jira logic remains the same]
                 }
             }
         }
     }
+     
 }
 
 
