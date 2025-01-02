@@ -36,11 +36,13 @@ pipeline {
                     env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
                     env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
                     env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
-                    env.SCANOSS_DELTA_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
-                    env.SCANOSS_REPO_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/repository"
 
                     /****** Create Resources folder ******/
                     env.SCANOSS_BUILD_BASE_PATH = "${env.WORKSPACE}/scanoss/${currentBuild.number}"
+
+                    env.SCANOSS_DELTA_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
+                    env.SCANOSS_REPO_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/repository"
+
 
                     echo "=== Path Information ==="
                     echo "Workspace: ${env.WORKSPACE}"
