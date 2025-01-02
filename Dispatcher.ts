@@ -45,6 +45,8 @@ export class Dispatcher extends EventEmitter {
 
 
 
+
+
   constructor(scannerCfg = new ScannerCfg()) {
     super();
     this.scannerCfg = scannerCfg;
