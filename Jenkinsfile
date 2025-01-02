@@ -91,69 +91,6 @@ pipeline {
                             url: 'https://github.com/agustingroh/jenkins-test-personal'
                     }
 
-
-                    /***** Delta *****/
-                    deltaScan()
-
-
-                    /***** Scan *****/
-                    env.SCAN_FOLDER = "${env.SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
-                    echo "SCAN FOLDER OUTSIDE ${env.SCAN_FOLDER}"
-                    scan()
-
-                    /***** Upload Artifacts *****/
-                    uploadArtifacts()
-
-
-                    /**** Analyze results for copyleft ****/
-                    copyleft()
-
-
-                    /***** Publish report on Jenkins dashboard *****/
-                    publishReport()
-
-
-                    /***** Jira issue *****/
-                    withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                        script {
-                            echo "CHECK RESULT ${env.check_result}"
-                            echo "CHECK RESULT [${env.check_result}]"
-                            echo "Type of env.check_result: ${env.check_result.getClass()}"
-
-                            def testVariable = env.check_result == '1'
-
-                            echo "TEST VARIABLE ${testVariable}"
-
-                            if ((params.CREATE_JIRA_ISSUE == true) &&  (env.check_result != 0)) {
-
-
-                                echo "JIRA issue parameter value: ${params.CREATE_JIRA_ISSUE}"
-
-
-                                def copyLeft = sh(script: "cat ${SCANOSS_COPYLEFT_FILE_PATH}", returnStdout: true)
-
-                                copyLeft = copyLeft +  "\nMore details can be found: ${BUILD_URL}\nSource repository: ${env.REPOSITORY_URL}"
-
-                                def JSON_PAYLOAD =  [
-                                    fields : [
-                                        project : [
-                                            key: params.JIRA_PROJECT_KEY
-                                        ],
-                                        summary : "Copyleft licenses found at ${env.REPOSITORY_NAME}",
-                                        description: copyLeft,
-                                        issuetype: [
-                                            name: 'Bug'
-                                        ]
-                                    ]
-                                ]
-
-                                def jsonString = groovy.json.JsonOutput.toJson(JSON_PAYLOAD)
-
-                                createJiraIssue(PASSWORD, USERNAME, params.JIRA_URL, jsonString)
-                            }
-                        }
-                    }
-
                 }
             }
         }
