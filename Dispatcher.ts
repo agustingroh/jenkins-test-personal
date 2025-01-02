@@ -42,6 +42,9 @@ export class Dispatcher extends EventEmitter {
 
   private caCert: string;
 
+
+
+
   constructor(scannerCfg = new ScannerCfg()) {
     super();
     this.scannerCfg = scannerCfg;
