@@ -15,6 +15,7 @@ pipeline {
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
 
+        
         // JIRA Variables
 
         string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
