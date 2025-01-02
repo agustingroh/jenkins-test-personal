@@ -88,7 +88,7 @@ pipeline {
                     }
                     
                     // Run SCANOSS in Docker container
-                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('-u root --entrypoint=') {
+                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('--entrypoint="" -u root') {
                         env.SCAN_FOLDER = "${SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
                         scan()
                     }
