@@ -11,6 +11,7 @@ import { DispatcherResponse } from './Dispatcher/DispatcherResponse';
 import { ScannerCfg } from './ScannerCfg';
 import { ScannerEvents, ScannerInput, ScannerResults } from './ScannerTypes';
 
+
 import { WfpProvider } from './WfpProvider/WfpProvider';
 import { FingerprintPackage } from './WfpProvider/FingerprintPackage';
 import { WfpCalculator } from './WfpProvider/WfpCalculator/WfpCalculator';
