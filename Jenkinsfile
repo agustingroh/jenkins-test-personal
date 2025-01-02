@@ -4,6 +4,9 @@ pipeline {
         // REPOSITORY variables
         string(name: 'GITHUB_TOKEN_ID', defaultValue:"gh-token", description: 'Github repository token credential id')
 
+        // REPOSITORY variables
+        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.scanoss.com/scan/direct", description: 'Github repository token credential id')
+
         // SCAN Variables
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
 
