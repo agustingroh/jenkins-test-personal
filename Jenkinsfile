@@ -41,7 +41,7 @@ pipeline {
          agent {
             docker {
                 image params.SCANOSS_CLI_DOCKER_IMAGE
-                args '--entrypoint='
+                args '-u root --entrypoint='
                 // Run the container on the node specified at the
                 // top-level of the Pipeline, in the same workspace,
                 // rather than on a new node entirely:
