@@ -128,7 +128,17 @@ def uploadArtifacts() {
 }
 
 def deltaScan() {
-    echo 'Delta Scan Analysis enabled'
+
+    echo "=== Delta Analysis Settings ==="
+    echo "ENABLE_DELTA_ANALYSIS parameter is set to: ${params.ENABLE_DELTA_ANALYSIS}"
+    echo "Parameter type: ${params.ENABLE_DELTA_ANALYSIS.getClass()}"
+    
+    if (!params.ENABLE_DELTA_ANALYSIS) {
+        echo "Delta Analysis is disabled. Skipping..."
+        return
+    }
+    
+    echo "Starting Delta Analysis..."
 
     def payloadJson = readJSON text: env.payload
     def commits = payloadJson.commits
