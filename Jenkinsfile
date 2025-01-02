@@ -17,6 +17,7 @@ pipeline {
 
         // JIRA Variables
 
+        
         string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
 
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
