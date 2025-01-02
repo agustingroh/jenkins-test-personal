@@ -10,6 +10,7 @@ export class DispatchableItem {
   private fingerprintPackage: FingerprintPackage;
 
 
+
   private engineFlags: number;
 
   private sbom: string;
