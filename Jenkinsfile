@@ -310,4 +310,3 @@ def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
         echo e
     }
 }
-
