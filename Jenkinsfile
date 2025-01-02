@@ -148,7 +148,7 @@ def deltaScan() {
         }
         
         def commits = payloadJson.commits
-        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta/"
+        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
         def uniqueFileNames = new HashSet()
         
         echo "Number of commits found: ${commits.size()}"
@@ -195,10 +195,25 @@ def deltaScan() {
         
         dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
             uniqueFileNames.each { file ->
-                def sourcePath = "${file}"
-                def destinationPath = "${destinationFolder}"
-                echo "Copying: ${sourcePath} to ${destinationPath}"
-                sh "cp --parents ${sourcePath} ${destinationPath}"
+                sh """
+                          # Check if directories exist
+                          echo "Checking directories..."
+                          echo "Current directory: \$(pwd)"
+                          echo "Delta directory: ${destinationFolder}"
+
+                          if [ -d "${destinationFolder}" ]; then
+                              echo "Delta directory exists"
+                              if [ -f "${file}" ]; then
+                                  echo "Source file exists: ${file}"
+                                  cp --parents '${file}' '${destinationFolder}/'
+                              else
+                                  echo "Warning: Source file not found: ${file}"
+                              fi
+                          else
+                              echo "Error: Delta directory does not exist: ${destinationFolder}"
+                              exit 1
+                          fi
+                      """
             }
         }
         
