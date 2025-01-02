@@ -36,6 +36,10 @@ export class Dispatcher extends EventEmitter {
 
   private proxyAgent: HttpsProxyAgent | HttpProxyAgent;
 
+
+
+
+
   private caCert: string;
 
   constructor(scannerCfg = new ScannerCfg()) {
