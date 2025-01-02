@@ -128,64 +128,83 @@ def uploadArtifacts() {
 }
 
 def deltaScan() {
+ echo "Starting Delta Analysis..."
+    try {
+        // First, check if payload exists
+        if (!env.payload) {
+            echo "Warning: No payload found. This might not be a PR trigger."
+            return
+        }
 
-    echo "=== Delta Analysis Settings ==="
-    echo "ENABLE_DELTA_ANALYSIS parameter is set to: ${params.ENABLE_DELTA_ANALYSIS}"
-    echo "Parameter type: ${params.ENABLE_DELTA_ANALYSIS.getClass()}"
-    
-    if (!params.ENABLE_DELTA_ANALYSIS) {
-        echo "Delta Analysis is disabled. Skipping..."
-        return
-    }
-    
-    echo "Starting Delta Analysis..."
-
-    def payloadJson = readJSON text: env.payload
-    def commits = payloadJson.commits
-    def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
-    def uniqueFileNames = new HashSet()
-
-
-    echo "Number of commits found: ${commits.size()}"
-    
-    commits.each { commit ->
-        echo "\n=== Processing Commit: ${commit.id} ==="
-        echo "Commit message: ${commit.message}"
+        def payloadJson = readJSON text: env.payload
+        echo "Payload parsed successfully"
         
-        echo "\nModified files in this commit:"
-        if (commit.modified.size() > 0) {
-            commit.modified.each { fileName ->
-                echo "  - ${fileName}"
-                uniqueFileNames.add(fileName.trim())
-            }
-        } else {
-            echo "  No modified files"
+        // Check if commits exist in payload
+        if (!payloadJson.commits) {
+            echo "Warning: No commits found in payload"
+            return
         }
         
-        echo "\nAdded files in this commit:"
-        if (commit.added.size() > 0) {
-            commit.added.each { fileName ->
-                echo "  - ${fileName}"
-                uniqueFileNames.add(fileName.trim())
+        def commits = payloadJson.commits
+        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
+        def uniqueFileNames = new HashSet()
+        
+        echo "Number of commits found: ${commits.size()}"
+        
+        commits.each { commit ->
+            echo "\n=== Processing Commit ==="
+            if (commit.id) {
+                echo "Commit ID: ${commit.id}"
             }
-        } else {
-            echo "  No added files"
+            
+            // Safely handle modified files
+            if (commit.modified) {
+                echo "Processing modified files..."
+                commit.modified.each { fileName ->
+                    if (fileName) {
+                        echo "Adding modified file: ${fileName}"
+                        uniqueFileNames.add(fileName.trim())
+                    }
+                }
+            } else {
+                echo "No modified files in this commit"
+            }
+            
+            // Safely handle added files
+            if (commit.added) {
+                echo "Processing added files..."
+                commit.added.each { fileName ->
+                    if (fileName) {
+                        echo "Adding new file: ${fileName}"
+                        uniqueFileNames.add(fileName.trim())
+                    }
+                }
+            } else {
+                echo "No added files in this commit"
+            }
         }
-    }
-    
-    echo "\n=== Summary ==="
-    echo "Total unique files to process: ${uniqueFileNames.size()}"
-    echo "Files to be copied:"
-    uniqueFileNames.each { file ->
-        echo "  - ${file}"
-    }
-
-
-    dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
-        uniqueFileNames.each { file ->
-            def sourcePath = "${file}"
-            def destinationPath = "${destinationFolder}"
-            sh "cp --parents ${sourcePath} ${destinationPath}"
+        
+        if (uniqueFileNames.isEmpty()) {
+            echo "No files to process. Skipping file copy."
+            return
         }
+        
+        echo "\nTotal files to process: ${uniqueFileNames.size()}"
+        
+        dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
+            uniqueFileNames.each { file ->
+                def sourcePath = "${file}"
+                def destinationPath = "${destinationFolder}"
+                echo "Copying: ${sourcePath} to ${destinationPath}"
+                sh "cp --parents ${sourcePath} ${destinationPath}"
+            }
+        }
+        
+        echo "Delta Analysis completed successfully"
+        
+    } catch (Exception e) {
+        echo "Error in Delta Analysis: ${e.getMessage()}"
+        echo "Error details: ${e}"
+        throw e
     }
 }
