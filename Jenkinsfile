@@ -43,7 +43,7 @@ pipeline {
                     env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
 
                     /****** Create Resources folder ******/
-                    env.SCANOSS_BUILD_BASE_PATH = "scanoss/${currentBuild.number}"
+                    env.SCANOSS_BUILD_BASE_PATH = "${WORKSPACE}/scanoss/${currentBuild.number}"
                     sh '''
                         mkdir -p ${SCANOSS_BUILD_BASE_PATH}/reports
                         mkdir -p ${SCANOSS_BUILD_BASE_PATH}/repository
