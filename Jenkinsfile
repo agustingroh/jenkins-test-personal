@@ -66,9 +66,11 @@ pipeline {
                     
                     /****** Get Repository name and repo URL from payload ******/
                     def payloadJson = readJSON text: env.payload
-                    env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
-                    env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
-                    
+                    if (payloadJson.pull_request != null) {
+                        env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
+                        env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
+                    }
+
                     // Verify checkout
                     sh """
                         echo "Repository contents after checkout:"
