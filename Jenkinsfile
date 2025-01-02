@@ -92,27 +92,6 @@ pipeline {
                     }
 
 
-                    /***** Delta *****/
-                    deltaScan()
-
-
-                    /***** Scan *****/
-                    env.SCAN_FOLDER = "${env.SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
-                    echo "SCAN FOLDER OUTSIDE ${env.SCAN_FOLDER}"
-                    scan()
-
-                    /***** Upload Artifacts *****/
-                    uploadArtifacts()
-
-
-                    /**** Analyze results for copyleft ****/
-                    copyleft()
-
-
-                    /***** Publish report on Jenkins dashboard *****/
-                    publishReport()
-
-
                     /***** Jira issue *****/
                     withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID ,usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                         script {
