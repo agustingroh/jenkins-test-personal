@@ -131,7 +131,7 @@ def scan() {
 }
 
 def uploadArtifacts() {
-    def scanossResultsPath = "${env.SCANOSS_RESULTS_FILE_PATH}"
+    def scanossResultsPath = "scanoss/${currentBuild.number}/reports/scanoss-results.json"
     archiveArtifacts artifacts: scanossResultsPath, onlyIfSuccessful: true
 }
 
