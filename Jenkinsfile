@@ -148,7 +148,7 @@ def deltaScan() {
         }
         
         def commits = payloadJson.commits
-        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
+        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta/"
         def uniqueFileNames = new HashSet()
         
         echo "Number of commits found: ${commits.size()}"
