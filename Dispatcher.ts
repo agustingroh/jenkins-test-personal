@@ -37,6 +37,8 @@ export class Dispatcher extends EventEmitter {
 
 
 
+
+
   private recoverableErrors;
 
   private proxyAgent: HttpsProxyAgent | HttpProxyAgent;
