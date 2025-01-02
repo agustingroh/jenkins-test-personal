@@ -30,6 +30,9 @@ export class Dispatcher extends EventEmitter {
 
   private queueMaxLimitReached: boolean;
 
+
+  private testVariable: boolean;
+
   private queueMinLimitReached: boolean;
 
   private recoverableErrors;
