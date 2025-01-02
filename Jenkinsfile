@@ -145,14 +145,41 @@ def deltaScan() {
     def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
     def uniqueFileNames = new HashSet()
 
+
+    echo "Number of commits found: ${commits.size()}"
+    
     commits.each { commit ->
-        commit.modified.each { fileName ->
-            uniqueFileNames.add(fileName.trim())
+        echo "\n=== Processing Commit: ${commit.id} ==="
+        echo "Commit message: ${commit.message}"
+        
+        echo "\nModified files in this commit:"
+        if (commit.modified.size() > 0) {
+            commit.modified.each { fileName ->
+                echo "  - ${fileName}"
+                uniqueFileNames.add(fileName.trim())
+            }
+        } else {
+            echo "  No modified files"
         }
-        commit.added.each { fileName ->
-            uniqueFileNames.add(fileName.trim())
+        
+        echo "\nAdded files in this commit:"
+        if (commit.added.size() > 0) {
+            commit.added.each { fileName ->
+                echo "  - ${fileName}"
+                uniqueFileNames.add(fileName.trim())
+            }
+        } else {
+            echo "  No added files"
         }
     }
+    
+    echo "\n=== Summary ==="
+    echo "Total unique files to process: ${uniqueFileNames.size()}"
+    echo "Files to be copied:"
+    uniqueFileNames.each { file ->
+        echo "  - ${file}"
+    }
+
 
     dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
         uniqueFileNames.each { file ->
