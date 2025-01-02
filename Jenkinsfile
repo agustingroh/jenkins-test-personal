@@ -1,37 +1,47 @@
 pipeline {
+    agent any
+    
     parameters {
-
-        // REPOSITORY variables
-        string(name: 'GITHUB_TOKEN_ID', defaultValue:"gh-token", description: 'Github repository token credential id')
-
-        // SCAN Variables
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
+        string(name: 'GITHUB_REPO_URL', defaultValue: 'https://github.com/agustingroh/jenkins-test-personal/', description: 'GitHub repository URL')
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-
         string(name: 'SCANOSS_SBOM_IDENTIFY', defaultValue:"sbom.json", description: 'SCANOSS SBOM Identify filename')
-
         string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
-
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.9.0", description: 'SCANOSS CLI Docker Image')
-
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
-
-        // JIRA Variables
-
         string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
-
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
-
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
-
         booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
-
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
-    agent any
+    
+    environment {
+        SCANOSS_BUILD_BASE_PATH = "scanoss/${BUILD_NUMBER}"
+        SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
+    }
+    
     stages {
-        stage('Checkout') {
+        stage('SCANOSS') {
+            
+            when {
+                expression {
+                     def payload = readJSON text: "${env.payload}"
+
+                     return payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
+                }
+            }
+            
             steps {
                 script {
+                    // Clean workspace before checkout
+                    cleanWs()
+                    
+                    /***** File names *****/
+                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
+                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
+                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
+
                     /****** Create Resources folder ******/
                     env.SCANOSS_BUILD_BASE_PATH = "scanoss/${currentBuild.number}"
                     sh '''
@@ -41,222 +51,104 @@ pipeline {
                     '''
                     env.SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
 
+                    /***** Resources Paths *****/
+                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
+                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
+                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
+
+                    // Checkout repository using git step
+                    dir("${SCANOSS_BUILD_BASE_PATH}/repository") {
+                        git branch: params.BRANCH,
+                            credentialsId: params.GITHUB_TOKEN_ID,
+                            url: params.GITHUB_REPO_URL
+                    }
+                    
+                    
                     /****** Get Repository name and repo URL from payload ******/
                     def payloadJson = readJSON text: env.payload
                     env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
                     env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
-
-                    /****** Checkout repository in Jenkins container ******/
-                    dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
-                        git branch: 'main',
-                            credentialsId: params.GITHUB_TOKEN_ID,
-                            url: 'https://github.com/agustingroh/jenkins-test-personal'
+                    
+                    // Verify checkout
+                    sh """
+                        echo "Repository contents after checkout:"
+                        ls -la ${SCANOSS_BUILD_BASE_PATH}/repository
+                    """
+                    
+                    // Run delta scan if enabled
+                    if (params.ENABLE_DELTA_ANALYSIS) {
+                        deltaScan()
                     }
-
-                    /***** Delta Analysis if enabled *****/
-                    deltaScan()
-                }
-            }
-        }
-
-        stage('SCANOSS') {
-            when {
-                expression {
-                    def payload = readJSON text: "${env.payload}"
-                    return payload.pull_request != null && payload.pull_request.base.ref == 'main' && payload.action == 'opened'
-                }
-            }
-            agent {
-                docker {
-                    label 'docker'
-                    image params.SCANOSS_CLI_DOCKER_IMAGE
-                    args '-u root --entrypoint='
-                    reuseNode true
-                }
-            }
-            steps {
-                script {
-                    /***** File names *****/
-                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
-                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
-                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
-
-                    /***** Resources Paths *****/
-                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
-                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
-                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
-
-                    /***** Scan *****/
-                    env.SCAN_FOLDER = "${env.SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
-                    echo "SCAN FOLDER OUTSIDE ${env.SCAN_FOLDER}"
-                    scan()
-
-                    /***** Upload Artifacts *****/
+                    
+                    // Run SCANOSS in Docker container
+                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('-u root --entrypoint=') {
+                        env.SCAN_FOLDER = "${SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
+                        scan()
+                    }
+                    
+                    // Process results
                     uploadArtifacts()
-
-                    /**** Analyze results for copyleft ****/
-                    copyleft()
-
-                    /***** Publish report on Jenkins dashboard *****/
-                    publishReport()
-
-                    /***** Jira issue *****/
-                    // ... [rest of the Jira logic remains the same]
                 }
             }
         }
     }
-     
 }
-
-
-def publishReport() {
-     publishReport name: "Scan Results", displayType: "dual", provider: csv(id: "report-summary", pattern: "${env.SCANOSS_LICENSE_FILE_PATH}")
-}
-
-def copyleft() {
-    try {
-
-         env.check_result = sh (returnStdout: true, script: '''
-            echo 'component,name,copyleft' > $SCANOSS_LICENSE_FILE_PATH
-
-            jq -r 'reduce .[]?[] as \$item ({}; select(\$item.purl) | .[\$item.purl[0] + \"@\" + \$item.version] += [\$item.licenses[]? | select(.copyleft == \"yes\") | .name]) | to_entries[] | select(.value | unique | length > 0) | [.key, .key, (.value | unique | length)] | @csv' $SCANOSS_RESULTS_FILE_PATH >> $SCANOSS_LICENSE_FILE_PATH
-            
-            
-            printf '|| Component || Purl || Version || Licenses||\n' > $SCANOSS_COPYLEFT_FILE_PATH
-           
-
-           jq -r '[.[]?[] | select(.licenses) | select(.licenses[] | .copyleft? == \"yes\") | {component: .component, version: .version, purl: .purl[], licenses: (.licenses | map(.name) | join(\",\"))}] | unique_by(.purl) | sort_by(.component) | to_entries[] | "|\\(.value.component)|\\(.value.purl)|\\(.value.version)|\\(.value.licenses)|"'  $SCANOSS_RESULTS_FILE_PATH >> $SCANOSS_COPYLEFT_FILE_PATH
-
-
-            check_result=$(if [ $(wc -l < $SCANOSS_LICENSE_FILE_PATH) -gt 1 ]; then echo "1"; else echo "0"; fi);
-            echo \$check_result
-         ''').trim()
-
-
-         echo "CHECK RESULT ${env.check_result}"
-
-          if (params.ABORT_ON_POLICY_FAILURE && env.check_result != 0) {
-            currentBuild.result = "FAILURE"
-          }
-
-    } catch(e) {
-        echo e.getMessage()
-        if (params.ABORT_ON_POLICY_FAILURE) {
-            currentBuild.result = "FAILURE"
-        }
-    }
-}
-
-
- def uploadArtifacts() {
-  def scanossResultsPath = "${env.SCANOSS_RESULTS_FILE_PATH}"
-  archiveArtifacts artifacts: scanossResultsPath, onlyIfSuccessful: true
-}
-
 
 def scan() {
-  withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID , variable: 'SCANOSS_API_TOKEN')]) {
-    dir("${env.SCAN_FOLDER}") {
-        script {
-             sh '''
+    withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID, variable: 'SCANOSS_API_TOKEN')]) {
+        dir("${env.SCAN_FOLDER}") {
+            script {
+                sh '''
+                    echo "=== Directory Information ==="
+                    echo "Current working directory:"
+                    pwd
+                    
+                    SBOM_IDENTIFY=""
+                    if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
 
-                 echo $(pwd)
+                    SBOM_IGNORE=""
+                    if [ -f $SCANOSS_SBOM_IGNORE ]; then SBOM_IGNORE="--ignore $SCANOSS_SBOM_IGNORE" ; fi
 
-                 SBOM_IDENTIFY=""
-                 if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
+                    CUSTOM_URL=""
+                    if [ ! -z $SCANOSS_API_URL ]; then CUSTOM_URL="--apiurl $SCANOSS_API_URL"; else CUSTOM_URL="--apiurl https://api.scanoss.com/scan/direct" ; fi
 
-                 SBOM_IGNORE=""
-                 if [ -f $SCANOSS_SBOM_IGNORE ]; then SBOM_IGNORE="--ignore $SCANOSS_SBOM_IGNORE" ; fi
+                    CUSTOM_TOKEN=""
+                    if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
 
-                 CUSTOM_URL=""
-                 if [ ! -z $SCANOSS_API_URL ]; then CUSTOM_URL="--apiurl $SCANOSS_API_URL"; else CUSTOM_URL="--apiurl https://osskb.org/api/scan/direct" ; fi
-
-                 CUSTOM_TOKEN=""
-                 if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
-
-
-                 scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output $WORKSPACE/$SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
-
+                    scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output $WORKSPACE/$SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
                 '''
-
+            }
         }
     }
-  }
+}
+
+def uploadArtifacts() {
+    def scanossResultsPath = "${env.SCANOSS_RESULTS_FILE_PATH}"
+    archiveArtifacts artifacts: scanossResultsPath, onlyIfSuccessful: true
 }
 
 def deltaScan() {
-   if (params.ENABLE_DELTA_ANALYSIS == true) {
+    echo 'Delta Scan Analysis enabled'
 
+    def payloadJson = readJSON text: env.payload
+    def commits = payloadJson.commits
+    def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
+    def uniqueFileNames = new HashSet()
 
-                            echo 'Delta Scan Analysis enabled'
+    commits.each { commit ->
+        commit.modified.each { fileName ->
+            uniqueFileNames.add(fileName.trim())
+        }
+        commit.added.each { fileName ->
+            uniqueFileNames.add(fileName.trim())
+        }
+    }
 
-                            // Parse the JSON payload
-                            def payloadJson = readJSON text: env.payload
-
-                            def commits = payloadJson.commits
-
-                            // Define the destination folder
-                            def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
-
-                            // Define a set to store unique file names
-                            def uniqueFileNames = new HashSet()
-
-
-                                // Iterate over each commit
-                                commits.each { commit ->
-
-
-                                    // Modified files
-                                    commit.modified.each { fileName ->
-                                        // Trim any leading or trailing whitespaces
-                                        fileName = fileName.trim()
-
-                                        uniqueFileNames.add(fileName)
-                                    }
-
-                                    // New files added
-                                    commit.added.each { fileName ->
-                                        // Trim any leading or trailing whitespaces
-                                        fileName = fileName.trim()
-
-                                        uniqueFileNames.add(fileName)
-
-                                    }
-                                }
-                            dir("${env.SCANOSS_BUILD_BASE_PATH}/repository"){
-                                uniqueFileNames.each { file ->
-
-                                    // Construct the source and destination paths
-                                            def sourcePath = "${file}"
-                                            def destinationPath = "${destinationFolder}"
-
-                                            // Copy the file
-                                        sh "cp --parents ${sourcePath} ${destinationPath}"
-
-                                }
-                            }
+    dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
+        uniqueFileNames.each { file ->
+            def sourcePath = "${file}"
+            def destinationPath = "${destinationFolder}"
+            sh "cp --parents ${sourcePath} ${destinationPath}"
+        }
     }
 }
-
-
-def createJiraIssue(jiraToken, jiraUsername, jiraAPIEndpoint, payload) {
-
-    env.TOKEN = jiraToken
-    env.USER = jiraUsername
-    env.JIRA_ENDPOINT_URL = jiraAPIEndpoint + '/rest/api/2/issue/'
-    env.PAYLOAD = payload
-
-    try {
-        def command = """
-            curl -u '${USER}:${TOKEN}' -X POST --data '${PAYLOAD}' -H 'Content-Type: application/json' '${JIRA_ENDPOINT_URL}'
-        """
-
-        def response = sh(script: command, returnStdout: true).trim()
-        echo "Response: ${response}"
-
-    } catch (Exception e) {
-        echo e
-    }
-}
-
