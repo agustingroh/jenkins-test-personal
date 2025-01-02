@@ -15,12 +15,7 @@ pipeline {
         booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
-    
-    environment {
-        SCANOSS_BUILD_BASE_PATH = "scanoss/${BUILD_NUMBER}"
-        SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
-    }
-    
+
     stages {
         stage('SCANOSS') {
             
@@ -41,6 +36,8 @@ pipeline {
                     env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
                     env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
                     env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
+                    env.SCANOSS_DELTA_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
+                    env.SCANOSS_REPO_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/repository"
 
                     /****** Create Resources folder ******/
                     env.SCANOSS_BUILD_BASE_PATH = "${env.WORKSPACE}/scanoss/${currentBuild.number}"
@@ -90,7 +87,7 @@ pipeline {
                     
                     // Run SCANOSS in Docker container
                     docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('-u root --entrypoint=') {
-                        env.SCAN_FOLDER = "${SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
+                        env.SCAN_FOLDER = (params.ENABLE_DELTA_ANALYSIS ? ${env.SCANOSS_DELTA_DIR} : ${env.SCANOSS_REPO_DIR})
                         scan()
                     }
                     
@@ -199,7 +196,7 @@ def deltaScan() {
         
         echo "\nTotal files to process: ${uniqueFileNames.size()}"
         
-        dir("${env.SCANOSS_BUILD_BASE_PATH}/repository") {
+        dir("${env.SCANOSS_REPO_DIR}") {
             uniqueFileNames.each { file ->
                 sh """
                           # Check if directories exist
@@ -207,11 +204,11 @@ def deltaScan() {
                           echo "Current directory: \$(pwd)"
                           echo "Delta directory: ${destinationFolder}"
 
-                          if [ -d "${destinationFolder}" ]; then
+                          if [ -d "${env.SCANOSS_DELTA_DIR}" ]; then
                               echo "Delta directory exists"
                               if [ -f "${file}" ]; then
                                   echo "Source file exists: ${file}"
-                                  cp --parents '${file}' '${destinationFolder}/'
+                                  cp --parents '${file}' '${env.SCANOSS_DELTA_DIR}'
                               else
                                   echo "Warning: Source file not found: ${file}"
                               fi
