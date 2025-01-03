@@ -121,7 +121,7 @@ pipeline {
 }
 
 def copyleftPolicy() {
-        dir("${env.SCANOSS_RESULTS_FILE_PATH}") {
+        dir("${env.SCANOSS_REPORT_FOLDER_PATH}") {
             script {
                 script {
                        def cmd = []
