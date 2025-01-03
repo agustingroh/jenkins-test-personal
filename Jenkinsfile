@@ -4,11 +4,22 @@ pipeline {
     parameters {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
         string(name: 'GITHUB_REPO_URL', defaultValue: 'https://github.com/agustingroh/jenkins-test-personal/', description: 'GitHub repository URL')
+
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        string(name: 'SCANOSS_SBOM_IDENTIFY', defaultValue:"sbom.json", description: 'SCANOSS SBOM Identify filename')
-        string(name: 'SCANOSS_SBOM_IGNORE', defaultValue:"sbom-ignore.json", description: 'SCANOSS SBOM Ignore filename')
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.9.0", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
+
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'SKIP_SNIPPET', defaultValue: false, description: 'Skip the generation of snippets.')
+        booleanParam(name: 'SCANOSS_SETTINGS', defaultValue: true, description: 'Settings file to use for scanning.')
+        string(name: 'SETTINGS_FILE_PATH', defaultValue: 'scanoss.json', description: 'SCANOSS settings file path.')
+
+        booleanParam(name: 'DEPENDENCY_ENABLED', defaultValue: false, description: 'Scan dependencies (optional - default false).')
+        string(name: 'DEPENDENCY_SCOPE', defaultValue: '', description: 'Gets development or production dependencies (scopes - prod|dev)')
+        string(name: 'DEPENDENCY_SCOPE_INCLUDE', defaultValue: '', description: 'Custom list of dependency scopes to be included. Provide scopes as a comma-separated list.')
+        string(name: 'DEPENDENCY_SCOPE_EXCLUDE', defaultValue: '', description: 'Custom list of dependency scopes to be excluded. Provide scopes as a comma-separated list.')
+
+
         string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
@@ -65,8 +76,8 @@ pipeline {
                     // Checkout repository using git step
                     dir("${SCANOSS_BUILD_BASE_PATH}/repository") {
                         git branch: params.BRANCH,
-                            credentialsId: params.GITHUB_TOKEN_ID,
-                            url: params.GITHUB_REPO_URL
+                        credentialsId: params.GITHUB_TOKEN_ID,
+                        url: params.GITHUB_REPO_URL
                     }
                     
                     
@@ -106,28 +117,58 @@ def scan() {
     withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID, variable: 'SCANOSS_API_TOKEN')]) {
         dir("${env.SCAN_FOLDER}") {
             script {
+                // Get dependency scopes
+                def dependencyScope = dependencyScopeArgs()
                 sh '''
-                    echo "=== Directory Information ==="
-                    echo "Current working directory:"
-                    pwd
-                    
-                    SBOM_IDENTIFY=""
-                    if [ -f $SCANOSS_SBOM_IDENTIFY ]; then SBOM_IDENTIFY="--identify $SCANOSS_SBOM_IDENTIFY" ; fi
 
-                    SBOM_IGNORE=""
-                    if [ -f $SCANOSS_SBOM_IGNORE ]; then SBOM_IGNORE="--ignore $SCANOSS_SBOM_IGNORE" ; fi
+                    API_KEY=""
+                    if [ ! -z $SCANOSS_API_TOKEN ]; then API_KEY="--key $SCANOSS_API_TOKEN" ; fi
 
-                    CUSTOM_URL=""
-                    if [ ! -z $SCANOSS_API_URL ]; then CUSTOM_URL="--apiurl $SCANOSS_API_URL"; else CUSTOM_URL="--apiurl https://api.scanoss.com/scan/direct" ; fi
+                    SKIP_SNIPPET_PARAM=""
+                    if [ ! -z $SKIP_SNIPPET ]; then SKIP_SNIPPET_PARAM="-S" ; fi
 
-                    CUSTOM_TOKEN=""
-                    if [ ! -z $SCANOSS_API_TOKEN ]; then CUSTOM_TOKEN="--key $SCANOSS_API_TOKEN" ; fi
+                    SCANOSS_SETTINGS_PARAM=""
+                    if [ ! -z $SCANOSS_SETTINGS ]; then SCANOSS_SETTINGS_PARAM="--settings $SETTINGS_FILE_PATH"; else SCANOSS_SETTINGS_PARAM="-stf" ; fi
 
-                    scanoss-py scan $CUSTOM_URL $CUSTOM_TOKEN $SBOM_IDENTIFY $SBOM_IGNORE --output $SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
+                    DEPENDENCY_SCOPE_PARAM = ""
+                    if [ ! -z $DEPENDENCY_ENABLED ]; then DEPENDENCY_SCOPE_PARAM="${dependencyScope}" ; fi
+
+
+                    scanoss-py scan $SCANOSS_API_URL $API_KEY $SKIP_SNIPPET_PARAM $SCANOSS_SETTINGS_PARAM --output $SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
                 '''
             }
         }
     }
+}
+
+def dependencyScopeArgs() {
+    def dependencyScopeInclude = params.DEPENDENCY_SCOPE_INCLUDE
+    def dependencyScopeExclude = params.DEPENDENCY_SCOPE_EXCLUDE
+    def dependencyScope = PARAMS.DEPENDENCY_SCOPE
+
+    // Count the number of non-empty values
+    def setScopes = [dependencyScopeInclude, dependencyScopeExclude, dependencyScope].findAll {
+        it != '' && it != null
+    }
+
+    if (setScopes.size() > 1) {
+        core.error('Only one dependency scope filter can be set')
+    }
+
+    if (dependencyScopeExclude && dependencyScopeExclude != '') {
+        return '--dep-scope-exc ' + dependencyScopeExclude
+    }
+    if (dependencyScopeInclude && dependencyScopeInclude != '') {
+        return '--dep-scope-inc ' + dependencyScopeInclude
+    }
+    if (dependencyScope && dependencyScope == 'prod') {
+        return '--dep-scope prod'
+    }
+    if (dependencyScope && dependencyScope == 'dev') {
+        return '--dep-scope dev'
+    }
+
+    return ''
 }
 
 def uploadArtifacts() {
