@@ -11,7 +11,7 @@ pipeline {
 
         booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
         booleanParam(name: 'SKIP_SNIPPET', defaultValue: false, description: 'Skip the generation of snippets.')
-        booleanParam(name: 'SCANOSS_SETTINGS', defaultValue: true, description: 'Settings file to use for scanning.')
+        booleanParam(name: 'SCANOSS_SETTINGS', defaultValue: false, description: 'Settings file to use for scanning.')
         string(name: 'SETTINGS_FILE_PATH', defaultValue: 'scanoss.json', description: 'SCANOSS settings file path.')
 
         booleanParam(name: 'DEPENDENCY_ENABLED', defaultValue: false, description: 'Scan dependencies (optional - default false).')
@@ -130,11 +130,10 @@ def scan() {
                     SCANOSS_SETTINGS_PARAM=""
                     if [ ! -z $SCANOSS_SETTINGS ]; then SCANOSS_SETTINGS_PARAM="--settings $SETTINGS_FILE_PATH"; else SCANOSS_SETTINGS_PARAM="-stf" ; fi
 
-                    DEPENDENCY_SCOPE_PARAM = ""
+                    DEPENDENCY_SCOPE_PARAM=""
                     if [ ! -z $DEPENDENCY_ENABLED ]; then DEPENDENCY_SCOPE_PARAM="${dependencyScope}" ; fi
 
-
-                    scanoss-py scan $SCANOSS_API_URL $API_KEY $SKIP_SNIPPET_PARAM $SCANOSS_SETTINGS_PARAM --output $SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
+                    scanoss-py scan $SCANOSS_API_URL $API_KEY $SKIP_SNIPPET_PARAM $SCANOSS_SETTINGS_PARAM $DEPENDENCY_SCOPE_PARAM --output $SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
                 '''
             }
         }
