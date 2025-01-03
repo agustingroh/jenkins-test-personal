@@ -23,6 +23,9 @@
  * THE SOFTWARE.
  */
 
+
+
+
 #define _GNU_SOURCE
 #include <ctype.h>
 #include <openssl/md5.h>
@@ -46,6 +49,10 @@
 
 #define DEFAULT_WFP_SCAN_FILE_NAME "scan.wfp"
 #define DEFAULT_RESULT_NAME "scanner_output.txt"
+
+
+
+
 
 const char EXCLUDED_DIR[] = " .git, .svn, .eggs, __pycache__, node_modules,";
 const char EXCLUDED_EXTENSIONS[] = " .1, .2, .3, .4, .5, .6, .7, .8, .9, .ac, .adoc, .am,"

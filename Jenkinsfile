@@ -9,7 +9,7 @@ pipeline {
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.9.0", description: 'SCANOSS CLI Docker Image')
         string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
-        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: true, description: 'Analyze those files what have changed or new ones')
+        booleanParam(name: 'ENABLE_DELTA_ANALYSIS', defaultValue: false, description: 'Analyze those files what have changed or new ones')
         booleanParam(name: 'SKIP_SNIPPET', defaultValue: false, description: 'Skip the generation of snippets.')
         booleanParam(name: 'SCANOSS_SETTINGS', defaultValue: true, description: 'Settings file to use for scanning.')
         string(name: 'SETTINGS_FILE_PATH', defaultValue: 'scanoss.json', description: 'SCANOSS settings file path.')
@@ -144,7 +144,7 @@ def scan() {
 def dependencyScopeArgs() {
     def dependencyScopeInclude = params.DEPENDENCY_SCOPE_INCLUDE
     def dependencyScopeExclude = params.DEPENDENCY_SCOPE_EXCLUDE
-    def dependencyScope = PARAMS.DEPENDENCY_SCOPE
+    def dependencyScope = params.DEPENDENCY_SCOPE
 
     // Count the number of non-empty values
     def setScopes = [dependencyScopeInclude, dependencyScopeExclude, dependencyScope].findAll {
