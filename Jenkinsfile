@@ -117,24 +117,45 @@ def scan() {
     withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID, variable: 'SCANOSS_API_TOKEN')]) {
         dir("${env.SCAN_FOLDER}") {
             script {
-                // Get dependency scopes
-                def dependencyScope = dependencyScopeArgs()
-                sh '''
+                script {
+                       def cmd = []
+                       cmd << "scanoss-py scan"
 
-                    API_KEY=""
-                    if [ ! -z $SCANOSS_API_TOKEN ]; then API_KEY="--key $SCANOSS_API_TOKEN" ; fi
+                       // API URL
+                       def apiUrl = env.SCANOSS_API_URL
+                       cmd << "--apiurl ${apiUrl}"
 
-                    SKIP_SNIPPET_PARAM=""
-                    if [ ! -z $SKIP_SNIPPET ]; then SKIP_SNIPPET_PARAM="-S" ; fi
+                       // API Key
+                       if (env.SCANOSS_API_TOKEN) {
+                           cmd << "--key ${env.SCANOSS_API_TOKEN}"
+                       }
 
-                    SCANOSS_SETTINGS_PARAM=""
-                    if [ ! -z $SCANOSS_SETTINGS ]; then SCANOSS_SETTINGS_PARAM="--settings $SETTINGS_FILE_PATH"; else SCANOSS_SETTINGS_PARAM="-stf" ; fi
+                       // Skip Snippet
+                       if (env.SKIP_SNIPPET) {
+                           cmd << "-S"
+                       }
 
-                    DEPENDENCY_SCOPE_PARAM=""
-                    if [ ! -z $DEPENDENCY_ENABLED ]; then DEPENDENCY_SCOPE_PARAM="${dependencyScope}" ; fi
+                       // Settings
+                       if (env.SCANOSS_SETTINGS) {
+                           cmd << "--settings ${env.SETTINGS_FILE_PATH}"
+                       } else {
+                           cmd << "-stf"
+                       }
 
-                    scanoss-py scan $SCANOSS_API_URL $API_KEY $SKIP_SNIPPET_PARAM $SCANOSS_SETTINGS_PARAM $DEPENDENCY_SCOPE_PARAM --output $SCANOSS_REPORT_FOLDER_PATH/$SCANOSS_RESULTS_JSON_FILE .
-                '''
+                       // Dependency Scope
+                       if (env.DEPENDENCY_ENABLED) {
+                           cmd << dependencyScopeArgs()
+                       }
+
+                       // Output path
+                       cmd << "--output ${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_RESULTS_JSON_FILE}"
+
+                       // Target directory
+                       cmd << "."
+
+                       // Execute the command
+                       sh(cmd.join(' '))
+                 }
             }
         }
     }

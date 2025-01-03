@@ -56,6 +56,7 @@
 
 
 
+
 const char EXCLUDED_DIR[] = " .git, .svn, .eggs, __pycache__, node_modules,";
 const char EXCLUDED_EXTENSIONS[] = " .1, .2, .3, .4, .5, .6, .7, .8, .9, .ac, .adoc, .am,"
 	                                " .asciidoc, .bmp, .build, .cfg, .chm, .class, .cmake, .cnf,"
