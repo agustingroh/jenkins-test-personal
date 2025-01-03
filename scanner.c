@@ -167,6 +167,7 @@ static uint key_count(char * buffer, const char * key)
 
 
 
+
 static uint wfp_files_count(scanner_object_t *s)
 {
     const char file_key[] = "file=";

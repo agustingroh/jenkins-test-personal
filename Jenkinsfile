@@ -121,7 +121,6 @@ pipeline {
 }
 
 def copyleftPolicy() {
-    withCredentials() {
         dir("${env.SCANOSS_RESULTS_FILE_PATH}") {
             script {
                 script {
@@ -143,7 +142,6 @@ def copyleftPolicy() {
                  }
             }
         }
-    }
 }
 
 def scan() {
