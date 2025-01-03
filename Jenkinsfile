@@ -1,10 +1,7 @@
 pipeline {
     agent any
-    
-    parameters {
-        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
-        string(name: 'GITHUB_REPO_URL', defaultValue: 'https://github.com/agustingroh/jenkins-test-personal/', description: 'GitHub repository URL')
 
+    parameters {
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.19.0", description: 'SCANOSS CLI Docker Image')
         string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
@@ -29,167 +26,146 @@ pipeline {
 
     stages {
         stage('SCANOSS') {
-            
-            when {
-                expression {
-                     def payload = readJSON text: "${env.payload}"
-                     return (payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened') || payload.ref != null
+            agent {
+                docker {
+                    image params.SCANOSS_CLI_DOCKER_IMAGE
+                    args '-u root --entrypoint='
+                    // Run the container on the node specified at the
+                    // top-level of the Pipeline, in the same workspace,
+                    // rather than on a new node entirely:
+                    reuseNode true
                 }
             }
             steps {
-                script {
-                    // Clean workspace before checkout
-                    cleanWs()
-                    
-                    /***** File names *****/
-                    env.SCANOSS_RESULTS_JSON_FILE = "scanoss-results.json"
-                    env.SCANOSS_LICENSE_CSV_FILE = "scanoss_license_data.csv"
-                    env.SCANOSS_COPYLEFT_MD_FILE = "copyleft.md"
+               script {
+                   env.POLICY_RESULTS = '0'
+                   scan()
+                   copyleftPolicyCheck()
+                   undeclaredComponentsPolicyCheck()
 
-                    /****** Create Resources folder ******/
-                    env.SCANOSS_BUILD_BASE_PATH = "${env.WORKSPACE}/scanoss/${currentBuild.number}"
-
-                    env.SCANOSS_DELTA_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
-                    env.SCANOSS_REPO_DIR = "${env.SCANOSS_BUILD_BASE_PATH}/repository"
-                    env.SCANOSS_REPORT_FOLDER_PATH = "${SCANOSS_BUILD_BASE_PATH}/reports"
-
-
-                    echo "=== Path Information ==="
-                    echo "Workspace: ${env.WORKSPACE}"
-                    echo "Build Number: ${currentBuild.number}"
-                    echo "SCANOSS Build Base Path: ${env.SCANOSS_BUILD_BASE_PATH}"
-
-                    sh '''
-                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/reports
-                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/repository
-                        mkdir -p ${SCANOSS_BUILD_BASE_PATH}/delta
-                    '''
-
-
-                    /***** Resources Paths *****/
-                    env.SCANOSS_LICENSE_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_LICENSE_CSV_FILE}"
-                    env.SCANOSS_RESULTS_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${SCANOSS_RESULTS_JSON_FILE}"
-                    env.SCANOSS_COPYLEFT_FILE_PATH = "${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
-
-                    // Checkout repository using git step
-                    dir("${SCANOSS_BUILD_BASE_PATH}/repository") {
-                        git branch: params.BRANCH,
-                        credentialsId: params.GITHUB_TOKEN_ID,
-                        url: params.GITHUB_REPO_URL
-                    }
-                    
-                    
-                    /****** Get Repository name and repo URL from payload ******/
-                    def payloadJson = readJSON text: env.payload
-                    if (payloadJson.pull_request != null) {
-                        env.REPOSITORY_NAME = payloadJson.pull_request.base.repo.name
-                        env.REPOSITORY_URL = payloadJson.pull_request.base.repo.html_url
-                    }
-
-                    // Verify checkout
-                    sh """
-                        echo "Repository contents after checkout:"
-                        ls -la ${SCANOSS_BUILD_BASE_PATH}/repository
-                    """
-                    
-                    // Run delta scan if enabled
-                    if (params.ENABLE_DELTA_ANALYSIS) {
-                        deltaScan()
-                    }
-                    
-                    // Run SCANOSS in Docker container
-                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('--entrypoint="" -u root') {
-                        env.SCAN_FOLDER = "${SCANOSS_BUILD_BASE_PATH}/" + (params.ENABLE_DELTA_ANALYSIS ? 'delta' : 'repository')
-                        scan()
-                    }
-                    
-                    // Process results
-                    uploadArtifacts("scanoss/${currentBuild.number}/reports/scanoss-results.json")
-
-                    // Copyleft policy
-                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('--entrypoint="" -u root') {
-                      copyleftPolicy()
-                    }
-
-                    uploadArtifacts("scanoss/${currentBuild.number}/reports/copyleft.md");
-
-
+                   if (env.POLICY_RESULTS == '1') {
+                       currentBuild.result = 'UNSTABLE'
+                   }
                 }
             }
+
         }
     }
 }
 
-def copyleftPolicy() {
-        dir("${env.SCANOSS_REPORT_FOLDER_PATH}") {
-            script {
-                script {
-                       def cmd = []
-                       cmd << "scanoss-py insp copyleft"
+def undeclaredComponentsPolicyCheck() {
+    script {
+        def cmd = []
+        cmd << "scanoss-py insp undeclared"
+        cmd << "--input results.json"
+        cmd << "--output scanoss-undeclared-components.md"
+        cmd << "--status scanoss-undeclared-status.md"
+        cmd << "-f md"
 
-                       // API URL
-                       def input = env.SCANOSS_RESULTS_JSON_FILE
-                       cmd << "--input ${input}"
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )
 
-                       def format = 'md'
-                       cmd << "-f ${format}"
+        if (exitCode != 0) {
+            echo "Warning: Copyleft inspection failed with exit code ${exitCode}"
+            currentBuild.result = 'UNSTABLE'
+            env.POLICY_RESULTS = '1'
+        } else {
+            sh '''
+                # Start with components file
+                cat scanoss-undeclared-components.md > scanoss-undeclared-components-policy.md
 
-                      // Output path
-                      cmd << "--output ${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
+                # Append status file
+                cat scanoss-undeclared-status.md >> scanoss-undeclared-components-policy.md
 
-                       // Execute the command
-                       sh(cmd.join(' '))
-                 }
-            }
+                # Show final result
+                echo "\n=== Final Combined Content ==="
+                cat scanoss-undeclared-components-policy.md
+
+                chmod 644 scanoss-undeclared-components-policy.md
+            '''
+            uploadArtifact('scanoss-undeclared-components-policy.md')
         }
+    }
+}
+
+def copyleftPolicyCheck() {
+    script {
+        def cmd = []
+        cmd << "scanoss-py insp copyleft"
+        cmd << "--input results.json"
+        cmd << "--output scanoss-copyleft-policy.md"
+        cmd << "-f md"
+
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )
+
+        if (exitCode != 0) {
+            echo "Warning: Copyleft inspection failed with exit code ${exitCode}"
+            env.POLICY_RESULTS = '1'
+        } else {
+            uploadArtifact('scanoss-copyleft-policy.md')
+        }
+    }
 }
 
 def scan() {
     withCredentials([string(credentialsId: params.SCANOSS_API_TOKEN_ID, variable: 'SCANOSS_API_TOKEN')]) {
-        dir("${env.SCAN_FOLDER}") {
-            script {
-                script {
-                       def cmd = []
-                       cmd << "scanoss-py scan"
+        script {
+            def cmd = []
+            cmd << "scanoss-py scan"
 
-                       // API URL
-                       def apiUrl = env.SCANOSS_API_URL
-                       cmd << "--apiurl ${apiUrl}"
+            // Add target directory
+            cmd << "."
 
-                       // API Key
-                       if (env.SCANOSS_API_TOKEN) {
-                           cmd << "--key ${env.SCANOSS_API_TOKEN}"
-                       }
+            // Add API URL
+            cmd << "--apiurl ${SCANOSS_API_URL}"
 
-                       // Skip Snippet
-                       if (env.SKIP_SNIPPET == 'true') {
-                           cmd << "-S"
-                       }
-
-                       // Settings
-                       if (env.SCANOSS_SETTINGS == 'true') {
-                           cmd << "--settings ${env.SETTINGS_FILE_PATH}"
-                       } else {
-                           cmd << "-stf"
-                       }
-
-                       // Dependency Scope
-                       if (env.DEPENDENCY_ENABLED == 'true') {
-                           cmd << dependencyScopeArgs()
-                       }
-
-                       // Output path
-                       cmd << "--output ${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_RESULTS_JSON_FILE}"
-
-                       // Target directory
-                       cmd << "."
-
-                       // Execute the command
-                       sh(cmd.join(' '))
-                 }
+            // Add API token if available
+            if (env.SCANOSS_API_TOKEN) {
+                cmd << "--key ${SCANOSS_API_TOKEN}"
             }
+
+           // Skip Snippet
+           if (env.SKIP_SNIPPET == 'true') {
+               cmd << "-S"
+           }
+
+           // Settings
+           if (env.SCANOSS_SETTINGS == 'true') {
+               cmd << "--settings ${env.SETTINGS_FILE_PATH}"
+           } else {
+               cmd << "-stf"
+           }
+
+           // Dependency Scope
+           if (env.DEPENDENCY_ENABLED == 'true') {
+               cmd << dependencyScopeArgs()
+           }
+
+            // Add output file
+            cmd << "--output results.json"
+
+            // Execute command
+            def exitCode = sh(
+                script: cmd.join(' '),
+                returnStatus: true
+            )
+
+            if (exitCode != 0) {
+                echo "Warning: Scan failed with exit code ${exitCode}"
+            }
+
+            uploadArtifact('results.json')
         }
     }
+}
+
+def uploadArtifact(artifactPath) {
+    archiveArtifacts artifacts: artifactPath, onlyIfSuccessful: true
 }
 
 def dependencyScopeArgs() {
@@ -220,106 +196,4 @@ def dependencyScopeArgs() {
     }
 
     return ''
-}
-
-def uploadArtifacts(artifactPath) {
-    def scanossResultsPath = "scanoss/${currentBuild.number}/reports/scanoss-results.json"
-    archiveArtifacts artifacts: artifactPath, onlyIfSuccessful: true
-}
-
-def deltaScan() {
- echo "Starting Delta Analysis..."
-    try {
-        // First, check if payload exists
-        if (!env.payload) {
-            echo "Warning: No payload found. This might not be a PR trigger."
-            return
-        }
-
-        def payloadJson = readJSON text: env.payload
-        echo "Payload parsed successfully"
-        
-        // Check if commits exist in payload
-        if (!payloadJson.commits) {
-            echo "Warning: No commits found in payload"
-            return
-        }
-        
-        def commits = payloadJson.commits
-        def destinationFolder = "${env.SCANOSS_BUILD_BASE_PATH}/delta"
-        def uniqueFileNames = new HashSet()
-        
-        echo "Number of commits found: ${commits.size()}"
-        
-        commits.each { commit ->
-            echo "\n=== Processing Commit ==="
-            if (commit.id) {
-                echo "Commit ID: ${commit.id}"
-            }
-            
-            // Safely handle modified files
-            if (commit.modified) {
-                echo "Processing modified files..."
-                commit.modified.each { fileName ->
-                    if (fileName) {
-                        echo "Adding modified file: ${fileName}"
-                        uniqueFileNames.add(fileName.trim())
-                    }
-                }
-            } else {
-                echo "No modified files in this commit"
-            }
-            
-            // Safely handle added files
-            if (commit.added) {
-                echo "Processing added files..."
-                commit.added.each { fileName ->
-                    if (fileName) {
-                        echo "Adding new file: ${fileName}"
-                        uniqueFileNames.add(fileName.trim())
-                    }
-                }
-            } else {
-                echo "No added files in this commit"
-            }
-        }
-        
-        if (uniqueFileNames.isEmpty()) {
-            echo "No files to process. Skipping file copy."
-            return
-        }
-        
-        echo "\nTotal files to process: ${uniqueFileNames.size()}"
-        
-        dir("${env.SCANOSS_REPO_DIR}") {
-            uniqueFileNames.each { file ->
-                sh """
-                      # Check if directories exist
-                      echo "Checking directories..."
-                      echo "Current directory: \$(pwd)"
-                      echo "Delta directory: ${destinationFolder}"
-
-                      if [ -d "${env.SCANOSS_DELTA_DIR}" ]; then
-                          echo "Delta directory exists"
-                          if [ -f "${file}" ]; then
-                              echo "Source file exists: ${file}"
-                              cp --parents '${file}' '${env.SCANOSS_DELTA_DIR}'
-                          else
-                              echo "Warning: Source file not found: ${file}"
-                          fi
-                      else
-                          echo "Error: Delta directory does not exist: ${destinationFolder}"
-                          exit 1
-                      fi
-                """
-            }
-        }
-        
-        echo "Delta Analysis completed successfully"
-        
-    } catch (Exception e) {
-        echo "Error in Delta Analysis: ${e.getMessage()}"
-        echo "Error details: ${e}"
-        throw e
-    }
 }
