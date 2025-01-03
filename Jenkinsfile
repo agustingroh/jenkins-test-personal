@@ -131,19 +131,19 @@ def scan() {
                        }
 
                        // Skip Snippet
-                       if (env.SKIP_SNIPPET.toBoolean()) {
+                       if (env.SKIP_SNIPPET == 'true') {
                            cmd << "-S"
                        }
 
                        // Settings
-                       if (env.SCANOSS_SETTINGS.toBoolean()) {
+                       if (env.SCANOSS_SETTINGS == 'true') {
                            cmd << "--settings ${env.SETTINGS_FILE_PATH}"
                        } else {
                            cmd << "-stf"
                        }
 
                        // Dependency Scope
-                       if (env.DEPENDENCY_ENABLED..toBoolean()) {
+                       if (env.DEPENDENCY_ENABLED == 'true') {
                            cmd << dependencyScopeArgs()
                        }
 
