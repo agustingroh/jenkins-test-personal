@@ -33,11 +33,9 @@ pipeline {
             when {
                 expression {
                      def payload = readJSON text: "${env.payload}"
-
                      return (payload.pull_request !=  null && payload.pull_request.base.ref == 'main' && payload.action == 'opened') || payload.ref != null
                 }
             }
-            
             steps {
                 script {
                     // Clean workspace before checkout
@@ -106,8 +104,43 @@ pipeline {
                     }
                     
                     // Process results
-                    uploadArtifacts()
+                    uploadArtifacts("scanoss/${currentBuild.number}/reports/scanoss-results.json")
+
+                    // Copyleft policy
+                    docker.image(params.SCANOSS_CLI_DOCKER_IMAGE).inside('--entrypoint="" -u root') {
+                      copyleftPolicy()
+                    }
+
+                    uploadArtifacts("scanoss/${currentBuild.number}/reports/copyleft.md");
+
+
                 }
+            }
+        }
+    }
+}
+
+def copyleftPolicy() {
+    withCredentials() {
+        dir("${env.SCANOSS_RESULTS_FILE_PATH}") {
+            script {
+                script {
+                       def cmd = []
+                       cmd << "scanoss-py insp copyleft"
+
+                       // API URL
+                       def input = env.SCANOSS_RESULTS_JSON_FILE
+                       cmd << "--input ${input}"
+
+                       def format = 'md'
+                       cmd << "-f ${format}"
+
+                      // Output path
+                      cmd << "--output ${env.SCANOSS_REPORT_FOLDER_PATH}/${env.SCANOSS_COPYLEFT_MD_FILE}"
+
+                       // Execute the command
+                       sh(cmd.join(' '))
+                 }
             }
         }
     }
@@ -191,9 +224,9 @@ def dependencyScopeArgs() {
     return ''
 }
 
-def uploadArtifacts() {
+def uploadArtifacts(artifactPath) {
     def scanossResultsPath = "scanoss/${currentBuild.number}/reports/scanoss-results.json"
-    archiveArtifacts artifacts: scanossResultsPath, onlyIfSuccessful: true
+    archiveArtifacts artifacts: artifactPath, onlyIfSuccessful: true
 }
 
 def deltaScan() {
@@ -263,24 +296,24 @@ def deltaScan() {
         dir("${env.SCANOSS_REPO_DIR}") {
             uniqueFileNames.each { file ->
                 sh """
-                          # Check if directories exist
-                          echo "Checking directories..."
-                          echo "Current directory: \$(pwd)"
-                          echo "Delta directory: ${destinationFolder}"
+                      # Check if directories exist
+                      echo "Checking directories..."
+                      echo "Current directory: \$(pwd)"
+                      echo "Delta directory: ${destinationFolder}"
 
-                          if [ -d "${env.SCANOSS_DELTA_DIR}" ]; then
-                              echo "Delta directory exists"
-                              if [ -f "${file}" ]; then
-                                  echo "Source file exists: ${file}"
-                                  cp --parents '${file}' '${env.SCANOSS_DELTA_DIR}'
-                              else
-                                  echo "Warning: Source file not found: ${file}"
-                              fi
+                      if [ -d "${env.SCANOSS_DELTA_DIR}" ]; then
+                          echo "Delta directory exists"
+                          if [ -f "${file}" ]; then
+                              echo "Source file exists: ${file}"
+                              cp --parents '${file}' '${env.SCANOSS_DELTA_DIR}'
                           else
-                              echo "Error: Delta directory does not exist: ${destinationFolder}"
-                              exit 1
+                              echo "Warning: Source file not found: ${file}"
                           fi
-                      """
+                      else
+                          echo "Error: Delta directory does not exist: ${destinationFolder}"
+                          exit 1
+                      fi
+                """
             }
         }
         
