@@ -269,18 +269,24 @@ def createJiraTicket(String title, String filePath) {
                 ]
             ]
 
-            // Create JIRA ticket
-            def response = httpRequest(
-                url: jiraEndpoint,
-                httpMode: 'POST',
-                contentType: 'APPLICATION_JSON',
-                requestBody: groovy.json.JsonOutput.toJson(payload),
-                authentication: params.JIRA_TOKEN_ID,
-                validResponseCodes: '200:299'
-            )
-
+            
+            // Convert payload to JSON string
+            def jsonString = groovy.json.JsonOutput.toJson(payload)
+            
+            // Create curl command
+            def curlCommand = """
+                curl -s -u '${JIRA_USER}:${JIRA_TOKEN}' \
+                    -X POST \
+                    -H 'Content-Type: application/json' \
+                    -d '${jsonString}' \
+                    '${jiraEndpoint}'
+            """
+            
+            // Execute curl command
+            def response = sh(script: curlCommand, returnStdout: true).trim()
+            
             echo "JIRA ticket created successfully"
-            return response.content
+            return response
 
         } catch (Exception e) {
             echo "Failed to create JIRA ticket: ${e.message}"
