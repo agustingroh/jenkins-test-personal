@@ -259,12 +259,28 @@ def createJiraTicket(String title, String filePath) {
                 error "File ${filePath} not found"
             }
 
+                        // Process and join into single line
+            def processedContent = content.readLines()
+                                       .drop(2)  // Skip first two lines
+                                       .findAll { !it.contains('|-') }  // Remove separator line
+                                       .collect { line -> 
+                                           line.trim().replaceAll('\\s*\\|\\s*', '|') + '\\n'
+                                       }
+                                       .join('')
+                                       .replaceAll('\\n', '')  // Remove actual newlines for single line output
+            
+            // Add header line
+            def finalContent = "|Component|Version|License|URL|Copyleft|\\n" + processedContent
+            
+            // For debugging
+            echo "Processed content: ${finalContent}"
+
             // Prepare JIRA ticket payload
             def payload = [
                 fields: [
                     project: [key: params.JIRA_PROJECT_KEY],
                     summary: title,
-                    description: fileContent,
+                    description: finalContent,
                     issuetype: [name: 'Bug']
                 ]
             ]
