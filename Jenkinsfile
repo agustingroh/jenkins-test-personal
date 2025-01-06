@@ -24,10 +24,10 @@ pipeline {
         string(name: 'LICENSES_COPYLEFT_EXPLICIT', defaultValue: '', description: 'Explicit list of Copyleft licenses to consider. Provide licenses as a comma-separated list.')
         
 
-        string(name: 'JIRA_TOKEN_ID', defaultValue:"jira-token" , description: 'Jira token id')
+        string(name: 'JIRA_CREDENTIALS', defaultValue:"jira-credentials" , description: 'Jira credentials')
         string(name: 'JIRA_URL', defaultValue:"https://scanoss.atlassian.net/" , description: 'Jira URL')
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"TESTPROJ" , description: 'Jira Project Key')
-        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
+        booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: true, description: 'Enable Jira reporting')
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
 
@@ -247,7 +247,7 @@ def List<String> buildCopyleftArgs() {
 def createJiraTicket(String title, String filePath) {
     def jiraEndpoint = "${params.JIRA_URL}/rest/api/2/issue/"
     
-    withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID,
+    withCredentials([usernamePassword(credentialsId: params.JIRA_CREDENTIALS,
                     usernameVariable: 'JIRA_USER',
                     passwordVariable: 'JIRA_TOKEN')]) {
         try {
