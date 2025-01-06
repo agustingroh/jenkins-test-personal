@@ -54,6 +54,12 @@ pipeline {
                    scan() 
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
+
+                    if (params.CREATE_JIRA_ISSUE) {
+                        createJiraTicket("Copyleft licenses found", env.SCANOSS_COPYLEFT_POLICY_FILE_NAME)
+                        
+                    }
+                   
                    if (env.POLICY_RESULTS == '1') {
                        currentBuild.result = 'UNSTABLE'
                    }
@@ -236,5 +242,50 @@ def List<String> buildCopyleftArgs() {
         return ['--exclude', params.LICENSES_COPYLEFT_EXCLUDE]
     }
     return []
+}
+
+def createJiraTicket(String title, String filePath) {
+    def jiraEndpoint = "${params.JIRA_URL}/rest/api/2/issue/"
+    
+    withCredentials([usernamePassword(credentialsId: params.JIRA_TOKEN_ID,
+                    usernameVariable: 'JIRA_USER',
+                    passwordVariable: 'JIRA_TOKEN')]) {
+        try {
+            // Read file content
+            def fileContent = ""
+            if (fileExists(filePath)) {
+                fileContent = readFile(file: filePath)
+            } else {
+                error "File ${filePath} not found"
+            }
+
+            // Prepare JIRA ticket payload
+            def payload = [
+                fields: [
+                    project: [key: params.JIRA_PROJECT_KEY],
+                    summary: title,
+                    description: fileContent,
+                    issuetype: [name: 'Bug']
+                ]
+            ]
+
+            // Create JIRA ticket
+            def response = httpRequest(
+                url: jiraEndpoint,
+                httpMode: 'POST',
+                contentType: 'APPLICATION_JSON',
+                requestBody: groovy.json.JsonOutput.toJson(payload),
+                authentication: params.JIRA_TOKEN_ID,
+                validResponseCodes: '200:299'
+            )
+
+            echo "JIRA ticket created successfully"
+            return response.content
+
+        } catch (Exception e) {
+            echo "Failed to create JIRA ticket: ${e.message}"
+            error "JIRA ticket creation failed"
+        }
+    }
 }
 
