@@ -31,6 +31,11 @@ pipeline {
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
     }
 
+    environment {
+        SCANOSS_COPYLEFT_POLICY_FILE_NAME = "scanoss-copyleft-policy.md"  // Default path, can be overridden
+        SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME = "scanoss-undeclared-components-policy.md"
+    }
+
     stages {
         stage('SCANOSS') {
             agent {
@@ -49,7 +54,6 @@ pipeline {
                    scan() 
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
-    
                    if (env.POLICY_RESULTS == '1') {
                        currentBuild.result = 'UNSTABLE'
                    }
@@ -86,18 +90,18 @@ def undeclaredComponentsPolicyCheck() {
             env.POLICY_RESULTS = '1'
             sh '''
                 # Start with components file
-                cat scanoss-undeclared-components.md > scanoss-undeclared-components-policy.md
+                cat scanoss-undeclared-components.md > ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
                 
                 # Append status file
-                cat scanoss-undeclared-status.md >> scanoss-undeclared-components-policy.md
+                cat scanoss-undeclared-status.md >> ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
                 
                 # Show final result
                 echo "\n=== Final Combined Content ==="
-                cat scanoss-undeclared-components-policy.md
+                cat ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
                 
-                chmod 644 scanoss-undeclared-components-policy.md
+                chmod 644 ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
             '''
-            uploadArtifact('scanoss-undeclared-components-policy.md')
+            uploadArtifact(env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME)
         }
     }
 }
@@ -111,7 +115,7 @@ def copyleftPolicyCheck() {
             '--input',
             'result.json',
             '--output',
-            'scanoss-copyleft-policy.md',
+            env.SCANOSS_COPYLEFT_POLICY_FILE_NAME,
             '-f',
             'md']
 
@@ -127,7 +131,7 @@ def copyleftPolicyCheck() {
             echo "No copyleft licenses were found"
         } else {
             env.POLICY_RESULTS = '1'
-            uploadArtifact('scanoss-copyleft-policy.md')
+            uploadArtifact(env.SCANOSS_COPYLEFT_POLICY_FILE_NAME)
         }
     }
 }
@@ -232,4 +236,62 @@ def List<String> buildCopyleftArgs() {
         return ['--exclude', params.LICENSES_COPYLEFT_EXCLUDE]
     }
     return []
+}
+
+
+def createCopyleftJiraIssue(){
+    if (!fileExists(env.SCANOSS_COPYLEFT_POLICY_FILE_NAME)) {
+            error "File '${env.SCANOSS_COPYLEFT_POLICY_FILE_NAME}' does not exist"
+        }
+        
+        def mdContent = readFile(env.SCANOSS_COPYLEFT_POLICY_FILE_NAME).trim()
+        if (mdContent.isEmpty()) {
+            error "File '${env.SCANOSS_COPYLEFT_POLICY_FILE_NAME}' is empty"
+        }
+        
+        echo "Content found in file. Creating JIRA issue..."
+        
+        // Create JIRA issue
+        createJiraIssue(
+            projectKey: params.JIRA_PROJECT_KEY,
+            summary: "Issue from Pipeline: ${env.JOB_NAME}",
+            description: mdContent,
+            issueType: 'Bug'
+        )
+    }
+}
+
+def createJiraIssue(Map config) {
+    withCredentials([usernamePassword(
+        credentialsId: params.JIRA_CREDS_ID,
+        usernameVariable: 'JIRA_USER',
+        passwordVariable: 'JIRA_TOKEN'
+    )]) {
+        def payload = [
+            fields: [
+                project: [key: config.projectKey],
+                summary: config.summary,
+                description: config.description,
+                issuetype: [name: config.issueType]
+            ]
+        ]
+        
+        try {
+            def response = httpRequest(
+                url: "${params.JIRA_URL}/rest/api/2/issue/",
+                httpMode: 'POST',
+                contentType: 'APPLICATION_JSON',
+                customHeaders: [[
+                    name: 'Authorization',
+                    value: "Basic ${("${JIRA_USER}:${JIRA_TOKEN}").bytes.encodeBase64().toString()}"
+                ]],
+                requestBody: groovy.json.JsonOutput.toJson(payload)
+            )
+            
+            echo "JIRA Issue created: ${response.content}"
+            return response.content
+        } catch (Exception e) {
+            error "Failed to create JIRA issue: ${e.message}"
+        }
+    }
 }
