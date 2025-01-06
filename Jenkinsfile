@@ -260,7 +260,7 @@ def createJiraTicket(String title, String filePath) {
             }
 
                         // Process and join into single line
-            def processedContent = content.readLines()
+            def processedContent = fileContent.readLines()
                                        .drop(2)  // Skip first two lines
                                        .findAll { !it.contains('|-') }  // Remove separator line
                                        .collect { line -> 
