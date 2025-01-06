@@ -67,7 +67,7 @@ def undeclaredComponentsPolicyCheck() {
             'insp',
             'undeclared',
             '--input',
-            'results.json',
+            'result.json',
             '--output',
             'scanoss-undeclared-components.md',
             '--status',
@@ -109,7 +109,7 @@ def copyleftPolicyCheck() {
             'insp',
             'copyleft',
             '--input',
-            'results.json',
+            'result.json',
             '--output',
             'scanoss-copyleft-policy.md',
             '-f',
@@ -167,7 +167,7 @@ def scan() {
             }
            
             // Add output file
-            cmd << "--output results.json"
+            cmd << "--output result.json"
             
             // Execute command
             def exitCode = sh(
@@ -179,7 +179,7 @@ def scan() {
                 echo "Warning: Scan failed with exit code ${exitCode}"
             }
             
-            uploadArtifact('results.json')
+            uploadArtifact('result.json')
         }
     }
 }
