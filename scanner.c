@@ -78,6 +78,7 @@ static int curl_request(int api_req, char* endpoint, char* data,scanner_object_t
 
 
 
+
 /* Returns a hexadecimal representation of the first "len" bytes in "bin" */
 static char *bin_to_hex(uint8_t *bin, uint32_t len)
 {
