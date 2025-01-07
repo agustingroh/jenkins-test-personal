@@ -117,16 +117,16 @@ def createJiraMarkdownUndeclaredComponentReport() {
         )   
         
         if (exitCode == 0) {
-            sh '''
+            sh """
                 # Start with components file
-                cat scanoss-undeclared-status-jira.md scanoss-undeclared-components-jira.md | tr '\n' '\\n' > ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
+                cat scanoss-undeclared-components-jira.md scanoss-undeclared-status-jira.md | tr '\n' '\\n' > "${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}"
                 
                 # Show final result
                 echo "\n=== Final Combined Content ==="
-                cat ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
+                cat "${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}"
                 
-                chmod 644 ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
-            '''
+                chmod 644 "${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}"
+            """
         }
     }
 }
@@ -179,21 +179,24 @@ def undeclaredComponentsPolicyCheck() {
         if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
+            echo "Undeclared Components were found"
             env.UNDECLARED_POLICY_STATUS = '1'
-            sh '''
+            sh """
                 # Start with components file
-                cat scanoss-undeclared-components.md > ${env.SCANOSS_UNDECLARED_REPORT_MD}
+                cat scanoss-undeclared-components.md > "${env.SCANOSS_UNDECLARED_REPORT_MD}"
                 
                 # Append status file
-                cat scanoss-undeclared-status.md >> ${env.SCANOSS_UNDECLARED_REPORT_MD}
+                cat scanoss-undeclared-status.md >> "${env.SCANOSS_UNDECLARED_REPORT_MD}"
                 
                 # Show final result
                 echo "\n=== Final Combined Content ==="
-                cat ${env.SCANOSS_UNDECLARED_REPORT_MD}
+                cat "${env.SCANOSS_UNDECLARED_REPORT_MD}"
                 
-                chmod 644 ${env.SCANOSS_UNDECLARED_REPORT_MD}
-            '''
-            uploadArtifact(env.SCANOSS_UNDECLARED_REPORT_MD)
+                chmod 644 "${env.SCANOSS_UNDECLARED_REPORT_MD}"
+            """
+             uploadArtifact(env.SCANOSS_UNDECLARED_REPORT_MD)
+
+
         }
     }
 }
@@ -346,7 +349,10 @@ def createJiraTicket(String title, String filePath) {
                 error "File ${filePath} not found"
             }
             def buildUrl = env.BUILD_URL
-            def cleanContent = fileContent.replace('\\n', '\n')
+            def cleanContent = fileContent
+            .replace('\\n', '\n')
+            .replace('\\"', '"') // Remove escaped quote
+            .replace('\\', '') // Remove any remaining backslashes
             def content = cleanContent + "\nMore details can be found: ${buildUrl}"
             echo "CONTENT: ${content}"
             // Prepare JIRA ticket payload
