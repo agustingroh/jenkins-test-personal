@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
     
@@ -32,8 +33,20 @@ pipeline {
     }
 
     environment {
-        SCANOSS_COPYLEFT_POLICY_FILE_NAME = "scanoss-copyleft-policy.md"  // Default path, can be overridden
-        SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME = "scanoss-undeclared-components-policy.md"
+        
+        // Artifact file names
+        SCANOSS_COPYLEFT_REPORT_MD = "scanoss-copyleft-report.md"
+        SCANOSS_UNDECLARED_REPORT_MD = "scanoss-undeclared-report.md"
+        SCANOSS_RESULTS_OUTPUT_FILE_NAME = "results.json"
+        
+        
+        // Policies status
+        COPYLEFT_POLICY_STATUS = '0'
+        UNDECLARED_POLICY_STATUS = '0'
+        
+        // Markdwon Jira report file names
+        SCANOSS_COPYLEFT_JIRA_REPORT_MD = "scanoss-copyleft-jira_report.md"
+        SCANOSS_UNDECLARED_JIRA_REPORT_MD = "scanoss-undeclared-components-jira-report.md"
     }
 
     stages {
@@ -50,17 +63,25 @@ pipeline {
             }
             steps {
                script {
-                   env.POLICY_RESULTS = '0'
                    scan() 
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
 
+
+                    // Create Jira issues if enabled
                     if (params.CREATE_JIRA_ISSUE) {
-                        createJiraTicket("Copyleft licenses found", env.SCANOSS_COPYLEFT_POLICY_FILE_NAME)
+                        if (env.COPYLEFT_POLICY_STATUS == '1') {
+                            createJiraTicket("Copyleft licenses found", env.SCANOSS_COPYLEFT_JIRA_REPORT_MD)
+                        }
                         
+                        if (env.UNDECLARED_POLICY_STATUS == '1') {
+                            createJiraTicket("Undeclared components found", env.SCANOSS_UNDECLARED_JIRA_REPORT_MD)
+                        }
                     }
                    
-                   if (env.POLICY_RESULTS == '1') {
+                   
+                   // Set build status based on policies
+                   if (env.COPYLEFT_POLICY_STATUS == '1' || env.UNDECLARED_POLICY_STATUS == '1') {
                        currentBuild.result = 'UNSTABLE'
                    }
                 }   
@@ -70,6 +91,67 @@ pipeline {
     }
 }
 
+def createJiraMarkdownUndeclaredComponentReport(){
+        script {
+        def cmd = [
+            'scanoss-py',
+            'insp',
+            'undeclared',
+            '--input',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
+            '--output',
+            'scanoss-undeclared-components-jira.md',
+            '--status',
+            'scanoss-undeclared-status-jira.md',
+            '-f',
+            'jira_md']
+
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )   
+        
+        if (exitCode == 0) {
+            sh '''
+                # Start with components file
+                cat scanoss-undeclared-status-jira.md scanoss-undeclared-components-jira.md | tr '\n' '\\n' > ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
+                
+                # Show final result
+                echo "\n=== Final Combined Content ==="
+                cat ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
+                
+                chmod 644 ${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}
+            '''
+        }
+    }
+}
+
+
+def createJiraMarkdownCopyleftReport(){
+        script {
+        def cmd = [
+            'scanoss-py',
+            'insp',
+            'copyleft',
+            '--input',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
+            '--output',
+            env.SCANOSS_COPYLEFT_JIRA_REPORT_MD,
+            '-f',
+            'jira_md']
+
+        // Copyleft licenses
+        cmd.addAll(buildCopyleftArgs())
+        
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )        
+            
+    }
+}
+
+
 def undeclaredComponentsPolicyCheck() {
     script {
         def cmd = [
@@ -77,7 +159,7 @@ def undeclaredComponentsPolicyCheck() {
             'insp',
             'undeclared',
             '--input',
-            'result.json',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
             '--output',
             'scanoss-undeclared-components.md',
             '--status',
@@ -93,21 +175,21 @@ def undeclaredComponentsPolicyCheck() {
         if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
-            env.POLICY_RESULTS = '1'
+            env.UNDECLARED_POLICY_STATUS = '1'
             sh '''
                 # Start with components file
-                cat scanoss-undeclared-components.md > ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
+                cat scanoss-undeclared-components.md > ${env.SCANOSS_UNDECLARED_REPORT_MD}
                 
                 # Append status file
-                cat scanoss-undeclared-status.md >> ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
+                cat scanoss-undeclared-status.md >> ${env.SCANOSS_UNDECLARED_REPORT_MD}
                 
                 # Show final result
                 echo "\n=== Final Combined Content ==="
-                cat ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
+                cat ${env.SCANOSS_UNDECLARED_REPORT_MD}
                 
-                chmod 644 ${env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME}
+                chmod 644 ${env.SCANOSS_UNDECLARED_REPORT_MD}
             '''
-            uploadArtifact(env.SCANOSS_UNDECLARED_COMPONENT_POLICY_FILE_NAME)
+            uploadArtifact(env.SCANOSS_UNDECLARED_REPORT_MD)
         }
     }
 }
@@ -119,9 +201,9 @@ def copyleftPolicyCheck() {
             'insp',
             'copyleft',
             '--input',
-            'result.json',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
             '--output',
-            env.SCANOSS_COPYLEFT_POLICY_FILE_NAME,
+            env.SCANOSS_COPYLEFT_REPORT_MD,
             '-f',
             'md']
 
@@ -136,8 +218,8 @@ def copyleftPolicyCheck() {
         if (exitCode == 1) {
             echo "No copyleft licenses were found"
         } else {
-            env.POLICY_RESULTS = '1'
-            uploadArtifact(env.SCANOSS_COPYLEFT_POLICY_FILE_NAME)
+            env.COPYLEFT_POLICY_STATUS = '1'
+            uploadArtifact(env.SCANOSS_COPYLEFT_REPORT_MD)
         }
     }
 }
@@ -177,7 +259,7 @@ def scan() {
             }
            
             // Add output file
-            cmd << "--output result.json"
+            cmd << "--output ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
             
             // Execute command
             def exitCode = sh(
@@ -189,7 +271,7 @@ def scan() {
                 echo "Warning: Scan failed with exit code ${exitCode}"
             }
             
-            uploadArtifact('result.json')
+            uploadArtifact(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)
         }
     }
 }
@@ -259,28 +341,14 @@ def createJiraTicket(String title, String filePath) {
                 error "File ${filePath} not found"
             }
 
-                        // Process and join into single line
-            def processedContent = fileContent.readLines()
-                                       .drop(2)  // Skip first two lines
-                                       .findAll { !it.contains('|-') }  // Remove separator line
-                                       .collect { line -> 
-                                           line.trim().replaceAll('\\s*\\|\\s*', '|') + '\\n'
-                                       }
-                                       .join('')
-                                       .replaceAll('\\n', '')  // Remove actual newlines for single line output
-            
-            // Add header line
-            def finalContent = "|Component|Version|License|URL|Copyleft|\\n" + processedContent
-            
-            // For debugging
-            echo "Processed content: ${finalContent}"
+         
 
             // Prepare JIRA ticket payload
             def payload = [
                 fields: [
                     project: [key: params.JIRA_PROJECT_KEY],
                     summary: title,
-                    description: finalContent,
+                    description: fileContent,
                     issuetype: [name: 'Bug']
                 ]
             ]
@@ -310,4 +378,3 @@ def createJiraTicket(String title, String filePath) {
         }
     }
 }
-
