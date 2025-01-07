@@ -5,7 +5,7 @@ pipeline {
     parameters {
 
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.19.1", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.19.3", description: 'SCANOSS CLI Docker Image')
         string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
 
@@ -40,10 +40,6 @@ pipeline {
         SCANOSS_RESULTS_OUTPUT_FILE_NAME = "results.json"
         
         
-        // Policies status
-        COPYLEFT_POLICY_STATUS = '0'
-        UNDECLARED_POLICY_STATUS = '0'
-        
         // Markdwon Jira report file names
         SCANOSS_COPYLEFT_JIRA_REPORT_MD = "scanoss-copyleft-jira_report.md"
         SCANOSS_UNDECLARED_JIRA_REPORT_MD = "scanoss-undeclared-components-jira-report.md"
@@ -63,18 +59,27 @@ pipeline {
             }
             steps {
                script {
+                   // Policies status
+                   env.COPYLEFT_POLICY_STATUS = '0'
+                   env.UNDECLARED_POLICY_STATUS = '0'
+                   
                    scan() 
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
-
+                   echo "Copyleft STATUS ${env.COPYLEFT_POLICY_STATUS}" 
+                   echo "undeclared Components STATUS ${env.UNDECLARED_POLICY_STATUS}"
 
                     // Create Jira issues if enabled
                     if (params.CREATE_JIRA_ISSUE) {
+                        echo "Create Jira Issue: ENABLED"
+                        
                         if (env.COPYLEFT_POLICY_STATUS == '1') {
+                            createJiraMarkdownCopyleftReport()
                             createJiraTicket("Copyleft licenses found", env.SCANOSS_COPYLEFT_JIRA_REPORT_MD)
                         }
                         
                         if (env.UNDECLARED_POLICY_STATUS == '1') {
+                            createJiraMarkdownUndeclaredComponentReport()
                             createJiraTicket("Undeclared components found", env.SCANOSS_UNDECLARED_JIRA_REPORT_MD)
                         }
                     }
@@ -91,7 +96,7 @@ pipeline {
     }
 }
 
-def createJiraMarkdownUndeclaredComponentReport(){
+def createJiraMarkdownUndeclaredComponentReport() {
         script {
         def cmd = [
             'scanoss-py',
@@ -125,7 +130,6 @@ def createJiraMarkdownUndeclaredComponentReport(){
         }
     }
 }
-
 
 def createJiraMarkdownCopyleftReport(){
         script {
@@ -218,6 +222,7 @@ def copyleftPolicyCheck() {
         if (exitCode == 1) {
             echo "No copyleft licenses were found"
         } else {
+            echo "Copyleft Licenses were found"
             env.COPYLEFT_POLICY_STATUS = '1'
             uploadArtifact(env.SCANOSS_COPYLEFT_REPORT_MD)
         }
@@ -340,22 +345,23 @@ def createJiraTicket(String title, String filePath) {
             } else {
                 error "File ${filePath} not found"
             }
-
-         
-
+            def buildUrl = env.BUILD_URL
+            def cleanContent = fileContent.replace('\\n', '\n')
+            def content = cleanContent + "\nMore details can be found: ${buildUrl}"
+            echo "CONTENT: ${content}"
             // Prepare JIRA ticket payload
             def payload = [
                 fields: [
                     project: [key: params.JIRA_PROJECT_KEY],
                     summary: title,
-                    description: fileContent,
+                    description: content,
                     issuetype: [name: 'Bug']
                 ]
             ]
-
             
-            // Convert payload to JSON string
             def jsonString = groovy.json.JsonOutput.toJson(payload)
+            
+            echo "JSON STRING: ${jsonString}"
             
             // Create curl command
             def curlCommand = """
