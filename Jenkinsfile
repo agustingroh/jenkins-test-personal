@@ -354,7 +354,6 @@ def createJiraTicket(String title, String filePath) {
             .replace('\\"', '"') // Remove escaped quote
             .replace('\\', '') // Remove any remaining backslashes
             def content = cleanContent + "\nMore details can be found: ${buildUrl}"
-            echo "CONTENT: ${content}"
             // Prepare JIRA ticket payload
             def payload = [
                 fields: [
@@ -366,21 +365,16 @@ def createJiraTicket(String title, String filePath) {
             ]
             
             def jsonString = groovy.json.JsonOutput.toJson(payload)
-            
-            echo "JSON STRING: ${jsonString}"
-            
-            // Create curl command
-            def curlCommand = """
-                curl -s -u '${JIRA_USER}:${JIRA_TOKEN}' \
-                    -X POST \
-                    -H 'Content-Type: application/json' \
-                    -d '${jsonString}' \
-                    '${jiraEndpoint}'
-            """
-            
-            // Execute curl command
-            def response = sh(script: curlCommand, returnStdout: true).trim()
-            
+
+            def response = sh(
+                script: '''
+                    curl -s -u $JIRA_USER:$JIRA_TOKEN \
+                        -X POST \
+                        -H 'Content-Type: application/json' \
+                        -d ''' + "'${jsonString}' " + "'${jiraEndpoint}'",
+                returnStdout: true
+            ).trim()
+
             echo "JIRA ticket created successfully"
             return response
 
