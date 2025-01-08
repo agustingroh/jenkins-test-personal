@@ -62,6 +62,10 @@ pipeline {
                    // Policies status
                    env.COPYLEFT_POLICY_STATUS = '0'
                    env.UNDECLARED_POLICY_STATUS = '0'
+                                       // Get the build number and job name
+                   def buildNumber = env.BUILD_NUMBER
+                   def pipelineName = env.JOB_NAME
+
                    
                    scan() 
                    copyleftPolicyCheck()
@@ -75,12 +79,12 @@ pipeline {
                         
                         if (env.COPYLEFT_POLICY_STATUS == '1') {
                             createJiraMarkdownCopyleftReport()
-                            createJiraTicket("Copyleft licenses found", env.SCANOSS_COPYLEFT_JIRA_REPORT_MD)
+                            createJiraTicket("Copyleft licenses found - ${pipelineName}/${buildNumber}", env.SCANOSS_COPYLEFT_JIRA_REPORT_MD)
                         }
                         
                         if (env.UNDECLARED_POLICY_STATUS == '1') {
                             createJiraMarkdownUndeclaredComponentReport()
-                            createJiraTicket("Undeclared components found", env.SCANOSS_UNDECLARED_JIRA_REPORT_MD)
+                            createJiraTicket("Undeclared components found - ${pipelineName}/${buildNumber}", env.SCANOSS_UNDECLARED_JIRA_REPORT_MD)
                         }
                     }
                    
