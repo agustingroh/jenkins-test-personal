@@ -5,7 +5,7 @@ pipeline {
     parameters {
 
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.19.3", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py:v1.19.4", description: 'SCANOSS CLI Docker Image')
         string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
 
@@ -123,7 +123,7 @@ def createJiraMarkdownUndeclaredComponentReport() {
         if (exitCode == 0) {
             sh """
                 # Start with components file
-                cat scanoss-undeclared-components-jira.md scanoss-undeclared-status-jira.md | tr '\n' '\\n' > "${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}"
+                cat scanoss-undeclared-components-jira.md scanoss-undeclared-status-jira.md > "${env.SCANOSS_UNDECLARED_JIRA_REPORT_MD}"
                 
                 # Show final result
                 echo "\n=== Final Combined Content ==="
@@ -353,11 +353,15 @@ def createJiraTicket(String title, String filePath) {
                 error "File ${filePath} not found"
             }
             def buildUrl = env.BUILD_URL
+            echo "FILE CONTENT: ${fileContent}"
             def cleanContent = fileContent
             .replace('\\n', '\n')
             .replace('\\"', '"') // Remove escaped quote
             .replace('\\', '') // Remove any remaining backslashes
-            def content = cleanContent + "\nMore details can be found: ${buildUrl}"
+            def content = fileContent + "\nMore details can be found: ${buildUrl}"
+
+            echo "CLEAN CONTENT: ${content}"
+            
             // Prepare JIRA ticket payload
             def payload = [
                 fields: [
@@ -369,6 +373,7 @@ def createJiraTicket(String title, String filePath) {
             ]
             
             def jsonString = groovy.json.JsonOutput.toJson(payload)
+            echo "JSON STRING: ${jsonString}"
 
             def response = sh(
                 script: '''
