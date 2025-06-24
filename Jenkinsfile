@@ -282,7 +282,7 @@ def copyleftPolicyCheck() {
             script: cmd.join(' '),
             returnStatus: true
         )
-
+         echo "Copyleft Licenses  (exit code: ${exitCode})"
         if (exitCode == 0) {
             echo "No copyleft licenses were found"
         } else {
