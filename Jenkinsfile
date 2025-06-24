@@ -60,7 +60,26 @@ pipeline {
             }
             steps {
 
-               checkout scm
+                if (env.CHANGE_BRANCH) {
+                        echo "PR detected: Checking out source branch '${env.CHANGE_BRANCH}' (PR #${env.CHANGE_ID})"
+                        echo "PR from: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                        
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "origin/${env.CHANGE_BRANCH}"]],
+                            userRemoteConfigs: [[url: env.GIT_URL]]
+                        ])
+                    } else {
+                        echo "Regular branch build: ${env.BRANCH_NAME}"
+                        checkout scm
+                    }
+                    
+                    // Verify what was checked out
+                    echo "=== Current branch status ==="
+                    sh 'git branch -a'
+                    sh 'git log --oneline -3'
+                    sh 'git status'
+               }
                 
                script {
                    // Policies status
