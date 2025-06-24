@@ -219,11 +219,34 @@ def undeclaredComponentsPolicyCheck() {
             cmd << "--debug"
         }
 
+
+              // DEBUG: Show the exact command being executed
+        echo "=== COMMAND DEBUG ==="
+        echo "Command array: ${cmd}"
+        echo "Joined command: '${cmd.join(' ')}'"
+        echo "===================="
+
+        // Try different approaches to capture exit code
         def exitCode = sh(
             script: cmd.join(' '),
             returnStatus: true
         )
+        
+        echo "=== EXIT CODE DEBUG ==="
+        echo "Captured exit code: ${exitCode}"
+        echo "Exit code type: ${exitCode.getClass()}"
+        echo "========================"
 
+        // Alternative method - run command and capture both output and status
+        def result = sh(
+            script: cmd.join(' '),
+            returnStdout: true,
+            returnStatus: false  // This will throw exception on non-zero exit
+        )
+        
+        echo "Command completed successfully (exit code must be 0)"
+        echo "Command output: ${result}"
+    
         echo "=== Undeclared Components Files Content ==="   
         if (fileExists('scanoss-undeclared-components.md')) {
             echo "--- scanoss-undeclared-components.md ---"
