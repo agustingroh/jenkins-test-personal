@@ -48,6 +48,44 @@ pipeline {
     }
 
     stages {
+
+
+        stage('Checkout Code') {
+            steps {
+                script {
+                    echo "=== Environment Variables ==="
+                    echo "BRANCH_NAME: ${env.BRANCH_NAME}"
+                    echo "CHANGE_BRANCH: ${env.CHANGE_BRANCH}"
+                    echo "CHANGE_TARGET: ${env.CHANGE_TARGET}"
+                    echo "CHANGE_ID: ${env.CHANGE_ID}"
+                    echo "GIT_URL: ${env.GIT_URL}"
+                    echo "=========================="
+                    
+                    if (env.CHANGE_BRANCH) {
+                        echo "PR detected: Checking out source branch '${env.CHANGE_BRANCH}' (PR #${env.CHANGE_ID})"
+                        echo "PR from: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                        
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "origin/${env.CHANGE_BRANCH}"]],
+                            userRemoteConfigs: [[url: env.GIT_URL]],
+                            extensions: [[$class: 'CloneOption', depth: 1, noTags: false, reference: '', shallow: true]]
+                        ])
+                    } else {
+                        echo "Regular branch build: ${env.BRANCH_NAME}"
+                        checkout scm
+                    }
+                    
+                    // Verify what was checked out (runs on Jenkins agent where git is available)
+                    echo "=== Current branch status ==="
+                    sh 'git branch -a'
+                    sh 'git log --oneline -3'
+                    sh 'git status'
+                    echo "=========================="
+                }
+            }
+        }
+        
         stage('SCANOSS') {
             agent {
                 docker {
@@ -59,30 +97,6 @@ pipeline {
                 }
             }
             steps {
-
-
-                 script {
-                    if (env.CHANGE_BRANCH) {
-                        echo "PR detected: Checking out source branch '${env.CHANGE_BRANCH}' (PR #${env.CHANGE_ID})"
-                        echo "PR from: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
-                        
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "origin/${env.CHANGE_BRANCH}"]],
-                            userRemoteConfigs: [[url: env.GIT_URL]]
-                        ])
-                    } else {
-                        echo "Regular branch build: ${env.BRANCH_NAME}"
-                        checkout scm
-                    }
-                    
-                    // Verify what was checked out
-                    echo "=== Current branch status ==="
-                    sh 'git branch -a'
-                    sh 'git log --oneline -3'
-                    sh 'git status'
-               }
-                
                script {
                    // Policies status
                    env.COPYLEFT_POLICY_STATUS = '0'
