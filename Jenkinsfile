@@ -31,7 +31,7 @@ pipeline {
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
 
         // Debug
-        string(name: 'DEBUG', defaultValue: false , description: 'Enable debugging')
+        booleanParam(name: 'DEBUG', defaultValue: false , description: 'Enable debugging')
     }
 
     environment {
