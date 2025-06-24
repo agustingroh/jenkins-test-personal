@@ -60,7 +60,9 @@ pipeline {
             }
             steps {
 
-                if (env.CHANGE_BRANCH) {
+
+                 script {
+                    if (env.CHANGE_BRANCH) {
                         echo "PR detected: Checking out source branch '${env.CHANGE_BRANCH}' (PR #${env.CHANGE_ID})"
                         echo "PR from: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
                         
