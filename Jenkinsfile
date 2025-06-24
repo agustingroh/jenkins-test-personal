@@ -59,6 +59,9 @@ pipeline {
                 }
             }
             steps {
+
+               checkout scm
+                
                script {
                    // Policies status
                    env.COPYLEFT_POLICY_STATUS = '0'
