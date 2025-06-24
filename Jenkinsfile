@@ -188,7 +188,7 @@ def createJiraMarkdownCopyleftReport(){
         cmd.addAll(buildCopyleftArgs())
 
         // Debug
-        if(params.DEBUG == 'true') {
+        if(params.DEBUG) {
             cmd << "--debug"
         }
 
@@ -215,7 +215,7 @@ def undeclaredComponentsPolicyCheck() {
             'md']
 
         // Debug
-        if(env.DEBUG == 'true') {
+        if(params.DEBUG) {
             cmd << "--debug"
         }
 
@@ -331,6 +331,15 @@ def scan() {
 
             if (exitCode != 0) {
                 echo "Warning: Scan failed with exit code ${exitCode}"
+            }
+
+            // ADD THIS: Display results.json content
+            echo "=== SCANOSS Results (results.json) ==="
+            if (fileExists(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)) {
+                sh "cat ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
+                echo "=== End of Results ==="
+            } else {
+                echo "⚠Results file not found: ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
             }
 
             uploadArtifact(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)
