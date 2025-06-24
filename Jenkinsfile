@@ -5,7 +5,7 @@ pipeline {
 
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
         string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py-jenkins:v1.26.2", description: 'SCANOSS CLI Docker Image')
-        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.scanoss.com/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
+        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
 
         booleanParam(name: 'SKIP_SNIPPET', defaultValue: false, description: 'Skip the generation of snippets.')
@@ -48,44 +48,6 @@ pipeline {
     }
 
     stages {
-
-
-        stage('Checkout Code') {
-            steps {
-                script {
-                    echo "=== Environment Variables ==="
-                    echo "BRANCH_NAME: ${env.BRANCH_NAME}"
-                    echo "CHANGE_BRANCH: ${env.CHANGE_BRANCH}"
-                    echo "CHANGE_TARGET: ${env.CHANGE_TARGET}"
-                    echo "CHANGE_ID: ${env.CHANGE_ID}"
-                    echo "GIT_URL: ${env.GIT_URL}"
-                    echo "=========================="
-                    
-                    if (env.CHANGE_BRANCH) {
-                        echo "PR detected: Checking out source branch '${env.CHANGE_BRANCH}' (PR #${env.CHANGE_ID})"
-                        echo "PR from: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
-                        
-                        checkout([
-                            $class: 'GitSCM',
-                            branches: [[name: "origin/${env.CHANGE_BRANCH}"]],
-                            userRemoteConfigs: [[url: env.GIT_URL]],
-                            extensions: [[$class: 'CloneOption', depth: 1, noTags: false, reference: '', shallow: true]]
-                        ])
-                    } else {
-                        echo "Regular branch build: ${env.BRANCH_NAME}"
-                        checkout scm
-                    }
-                    
-                    // Verify what was checked out (runs on Jenkins agent where git is available)
-                    echo "=== Current branch status ==="
-                    sh 'git branch -a'
-                    sh 'git log --oneline -3'
-                    sh 'git status'
-                    echo "=========================="
-                }
-            }
-        }
-        
         stage('SCANOSS') {
             agent {
                 docker {
@@ -219,30 +181,10 @@ def undeclaredComponentsPolicyCheck() {
             cmd << "--debug"
         }
 
-
-              // DEBUG: Show the exact command being executed
-        echo "=== COMMAND DEBUG ==="
-        echo "Command array: ${cmd}"
-        echo "Joined command: '${cmd.join(' ')}'"
-        echo "===================="
-
-        // Try different approaches to capture exit code
         def exitCode = sh(
             script: cmd.join(' '),
             returnStatus: true
         )
-        
-        echo "=== Undeclared Components Files Content ==="   
-        if (fileExists('scanoss-undeclared-components.md')) {
-            echo "--- scanoss-undeclared-components.md ---"
-            sh 'cat scanoss-undeclared-components.md'
-        } 
-        
-        if (fileExists('scanoss-undeclared-status.md')) {
-            echo "--- scanoss-undeclared-status.md ---"
-            sh 'cat scanoss-undeclared-status.md'
-        } 
-        echo "=== End of Undeclared Components Content ==="
 
         if (exitCode == 1) {
             echo "No Undeclared components were found"
@@ -290,7 +232,7 @@ def copyleftPolicyCheck() {
             script: cmd.join(' '),
             returnStatus: true
         )
-         echo "Copyleft Licenses  (exit code: ${exitCode})"
+
         if (exitCode == 1) {
             echo "No copyleft licenses were found"
         } else {
@@ -351,15 +293,6 @@ def scan() {
 
             if (exitCode != 0) {
                 echo "Warning: Scan failed with exit code ${exitCode}"
-            }
-
-            // ADD THIS: Display results.json content
-            echo "=== SCANOSS Results (results.json) ==="
-            if (fileExists(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)) {
-                sh "cat ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
-                echo "=== End of Results ==="
-            } else {
-                echo "⚠Results file not found: ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
             }
 
             uploadArtifact(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)
