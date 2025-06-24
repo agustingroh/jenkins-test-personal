@@ -241,7 +241,7 @@ def undeclaredComponentsPolicyCheck() {
         }
         
         echo "=== End of Undeclared Components Content ==="
-
+        echo "Undeclared components exit code(exit code: ${exitCode})"
         if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
