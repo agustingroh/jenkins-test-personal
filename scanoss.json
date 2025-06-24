@@ -21,6 +21,9 @@
       },
       {
         "purl": "pkg:github/scanoss/engine"
+      },
+      {
+        "purl": "pkg:github/scanoss/jenkins-pipeline-example"
       }
     ]
   }
