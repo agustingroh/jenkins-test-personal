@@ -188,7 +188,7 @@ def createJiraMarkdownCopyleftReport(){
         cmd.addAll(buildCopyleftArgs())
 
         // Debug
-        if(env.DEBUG == 'true') {
+        if(params.DEBUG == 'true') {
             cmd << "--debug"
         }
 
@@ -291,7 +291,7 @@ def scan() {
             cmd << "."
 
             // Add API URL
-            cmd << "--apiurl ${SCANOSS_API_URL}"
+            cmd << "--apiurl ${params.SCANOSS_API_URL}"
 
             // Add API token if available
             if(env.SCANOSS_API_TOKEN) {
@@ -299,19 +299,19 @@ def scan() {
             }
 
             // Skip Snippet
-            if(env.SKIP_SNIPPET == 'true') {
+            if(params.SKIP_SNIPPET) {
                cmd << "-S"
             }
 
             // Settings
-            if(env.SCANOSS_SETTINGS == 'true') {
+            if(params.SCANOSS_SETTINGS) {
                cmd << "--settings ${env.SETTINGS_FILE_PATH}"
             } else {
                cmd << "-stf"
             }
 
            // Dependency Scope
-            if(env.DEPENDENCY_ENABLED == 'true') {
+            if(params.DEPENDENCY_ENABLED) {
                cmd << buildDependencyScopeArgs()
             }
 
@@ -319,7 +319,7 @@ def scan() {
             cmd << "--output ${env.SCANOSS_RESULTS_OUTPUT_FILE_NAME}"
 
             // Debug
-            if(env.DEBUG == 'true') {
+            if(params.DEBUG) {
                 cmd << "--debug"
             }
 
