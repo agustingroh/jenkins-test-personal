@@ -262,7 +262,7 @@ def copyleftPolicyCheck() {
         cmd.addAll(buildCopyleftArgs())
 
         // Debug
-        if(env.DEBUG == 'true') {
+        if(params.DEBUG) {
             cmd << "--debug"
         }
 
@@ -305,7 +305,7 @@ def scan() {
 
             // Settings
             if(params.SCANOSS_SETTINGS) {
-               cmd << "--settings ${env.SETTINGS_FILE_PATH}"
+               cmd << "--settings ${params.SETTINGS_FILE_PATH}"
             } else {
                cmd << "-stf"
             }
