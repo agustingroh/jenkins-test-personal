@@ -224,6 +224,24 @@ def undeclaredComponentsPolicyCheck() {
             returnStatus: true
         )
 
+        echo "=== Undeclared Components Files Content ==="
+        
+        if (fileExists('scanoss-undeclared-components.md')) {
+            echo "--- scanoss-undeclared-components.md ---"
+            sh 'cat scanoss-undeclared-components.md'
+        } else {
+            echo "❌ scanoss-undeclared-components.md not found"
+        }
+        
+        if (fileExists('scanoss-undeclared-status.md')) {
+            echo "--- scanoss-undeclared-status.md ---"
+            sh 'cat scanoss-undeclared-status.md'
+        } else {
+            echo "❌ scanoss-undeclared-status.md not found"
+        }
+        
+        echo "=== End of Undeclared Components Content ==="
+
         if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
