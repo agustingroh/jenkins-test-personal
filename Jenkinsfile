@@ -232,21 +232,6 @@ def undeclaredComponentsPolicyCheck() {
             returnStatus: true
         )
         
-        echo "=== EXIT CODE DEBUG ==="
-        echo "Captured exit code: ${exitCode}"
-        echo "Exit code type: ${exitCode.getClass()}"
-        echo "========================"
-
-        // Alternative method - run command and capture both output and status
-        def result = sh(
-            script: cmd.join(' '),
-            returnStdout: true,
-            returnStatus: false  // This will throw exception on non-zero exit
-        )
-        
-        echo "Command completed successfully (exit code must be 0)"
-        echo "Command output: ${result}"
-    
         echo "=== Undeclared Components Files Content ==="   
         if (fileExists('scanoss-undeclared-components.md')) {
             echo "--- scanoss-undeclared-components.md ---"
@@ -258,7 +243,7 @@ def undeclaredComponentsPolicyCheck() {
             sh 'cat scanoss-undeclared-status.md'
         } 
         echo "=== End of Undeclared Components Content ==="
-        echo "Undeclared components  (exit code: ${exitCode})"
+
         if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
