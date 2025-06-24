@@ -54,6 +54,9 @@ static const json_int_t JSON_INT_MAX = sizeof(json_int_t) == 1
                                                          ? INT32_MAX
                                                          : INT64_MAX));
 
+
+
+
 static unsigned char hex_value(json_char c)
 {
   if (isdigit(c))
