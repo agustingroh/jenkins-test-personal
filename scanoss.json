@@ -24,6 +24,9 @@
       },
       {
         "purl": "pkg:github/scanoss/engine"
+      },
+      {
+        "purl": "pkg:deb/debian/remind"
       }
     ]
   }
