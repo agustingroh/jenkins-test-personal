@@ -235,8 +235,8 @@ def undeclaredComponentsPolicyCheck() {
             sh 'cat scanoss-undeclared-status.md'
         } 
         echo "=== End of Undeclared Components Content ==="
-
-        if (exitCode == 0) {
+        echo "Undeclared components  (exit code: ${exitCode})"
+        if (exitCode == 1) {
             echo "No Undeclared components were found"
         } else {
             echo "Undeclared Components were found"
@@ -283,7 +283,7 @@ def copyleftPolicyCheck() {
             returnStatus: true
         )
          echo "Copyleft Licenses  (exit code: ${exitCode})"
-        if (exitCode == 0) {
+        if (exitCode == 1) {
             echo "No copyleft licenses were found"
         } else {
             echo "Copyleft Licenses were found"
