@@ -224,25 +224,19 @@ def undeclaredComponentsPolicyCheck() {
             returnStatus: true
         )
 
-        echo "=== Undeclared Components Files Content ==="
-        
+        echo "=== Undeclared Components Files Content ==="   
         if (fileExists('scanoss-undeclared-components.md')) {
             echo "--- scanoss-undeclared-components.md ---"
             sh 'cat scanoss-undeclared-components.md'
-        } else {
-            echo "❌ scanoss-undeclared-components.md not found"
-        }
+        } 
         
         if (fileExists('scanoss-undeclared-status.md')) {
             echo "--- scanoss-undeclared-status.md ---"
             sh 'cat scanoss-undeclared-status.md'
-        } else {
-            echo "❌ scanoss-undeclared-status.md not found"
-        }
-        
+        } 
         echo "=== End of Undeclared Components Content ==="
-        echo "Undeclared components exit code(exit code: ${exitCode})"
-        if (exitCode == 1) {
+
+        if (exitCode == 0) {
             echo "No Undeclared components were found"
         } else {
             echo "Undeclared Components were found"
@@ -289,7 +283,7 @@ def copyleftPolicyCheck() {
             returnStatus: true
         )
 
-        if (exitCode == 1) {
+        if (exitCode == 0) {
             echo "No copyleft licenses were found"
         } else {
             echo "Copyleft Licenses were found"
