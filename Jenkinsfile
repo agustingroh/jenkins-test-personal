@@ -4,8 +4,8 @@ pipeline {
     parameters {
 
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py-jenkins:v1.26.2", description: 'SCANOSS CLI Docker Image')
-        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.scanoss.com/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py-jenkins:v1.30.0", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_API_URL', defaultValue:"https://api.osskb.org/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
 
         booleanParam(name: 'SKIP_SNIPPET', defaultValue: false, description: 'Skip the generation of snippets.')
@@ -28,6 +28,8 @@ pipeline {
         string(name: 'JIRA_URL', defaultValue:"" , description: 'Jira URL')
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"" , description: 'Jira Project Key')
         booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
+
+        // Policies setup
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
 
         // Debug
@@ -40,6 +42,7 @@ pipeline {
         SCANOSS_COPYLEFT_REPORT_MD = "scanoss-copyleft-report.md"
         SCANOSS_UNDECLARED_REPORT_MD = "scanoss-undeclared-report.md"
         SCANOSS_RESULTS_OUTPUT_FILE_NAME = "results.json"
+        CYCLONEDX_FILE_NAME = "cyclonedx.json"
 
 
         // Markdown Jira report file names
@@ -70,6 +73,7 @@ pipeline {
 
 
                    scan()
+                   generateCycloneDXOutput()
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
                    echo "[ Copyleft status ]: ${env.COPYLEFT_POLICY_STATUS}"
@@ -299,6 +303,33 @@ def scan() {
         }
     }
 }
+
+def generateCycloneDXOutput(){
+    script {
+        def cmd = [
+            'scanoss-py',
+            'convert',
+            '--input',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
+            '--format',
+            'cyclonedx',
+            '--output',
+            env.CYCLONEDX_FILE_NAME]
+
+        // Execute command
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )
+
+        if (exitCode != 0) {
+            echo "ERROR: CycloneDX file conversion failed ${exitCode}"
+            return
+        }
+        uploadArtifact(env.CYCLONEDX_FILE_NAME)
+    }
+}
+
 
 def uploadArtifact(artifactPath) {
     archiveArtifacts artifacts: artifactPath, onlyIfSuccessful: true
