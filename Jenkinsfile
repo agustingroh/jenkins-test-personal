@@ -314,9 +314,8 @@ def generateCycloneDXOutput(){
             '--format',
             'cyclonedx'
             '--output',
-            env.CYCLONEDX_FILE_NAME
-        ]
-        
+            env.CYCLONEDX_FILE_NAME]
+
         // Execute command
         def exitCode = sh(
             script: cmd.join(' '),
