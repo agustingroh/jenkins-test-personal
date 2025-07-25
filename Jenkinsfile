@@ -36,7 +36,7 @@ pipeline {
         booleanParam(name: 'DEBUG', defaultValue: false , description: 'Enable debugging')
 
         // Dependency Track
-        booleanParam(name: 'DEPENDENCY_TRACK_ENABLED', defaultValue: true, description: "Enable automatic upload of scan results to Dependency Track")
+        booleanParam(name: 'DEPENDENCY_TRACK_ENABLED', defaultValue: false, description: "Enable automatic upload of scan results to Dependency Track")
         string(name: 'DEPENDENCY_TRACK_API_KEY_ID', defaultValue:"dependency-track-api-key", description: "The reference ID for the Dependency Track API KEY credential")
         string(name: 'DEPENDENCY_TRACK_URL', defaultValue:"https://dependency-track.scanoss.xyz" , description: "URL of the Dependency Track instance. Required when Dependency Track is enabled")
         string(name: 'DEPENDENCY_TRACK_PROJECT_ID', defaultValue:"" , description: "UUID of an existing project in Dependency Track. Required when project name and version are not provided")
