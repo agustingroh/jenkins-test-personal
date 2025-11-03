@@ -335,7 +335,7 @@ def convertToCycloneDX() {
             echo "Warning: failed to convert scannos raw results to cylonedx format. Exit code ${exitCode}"
         }
 
-        uploadArtifact(scanoss-cyclonedx.json)
+        uploadArtifact('scanoss-cyclonedx.json')
     }
 }
 
