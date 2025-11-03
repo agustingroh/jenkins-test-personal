@@ -79,6 +79,10 @@ pipeline {
                    // Output formats
                    // CycloneDX 1.4
                    convertToCycloneDX()
+                   // SPDX 2.2
+                   convertToSPDX()
+                   // CSV
+                   convertToCSV()
 
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
