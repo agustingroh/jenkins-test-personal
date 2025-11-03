@@ -4,7 +4,7 @@ pipeline {
     parameters {
 
         string(name: 'SCANOSS_API_TOKEN_ID', defaultValue:"scanoss-token", description: 'The reference ID for the SCANOSS API TOKEN credential')
-        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py-jenkins:v1.26.2", description: 'SCANOSS CLI Docker Image')
+        string(name: 'SCANOSS_CLI_DOCKER_IMAGE', defaultValue:"ghcr.io/scanoss/scanoss-py-jenkins:v1.40.1", description: 'SCANOSS CLI Docker Image')
         string(name: 'SCANOSS_API_URL', defaultValue:"https://api.scanoss.com/scan/direct", description: 'SCANOSS API URL (optional - default: https://api.osskb.org/scan/direct)')
 
 
@@ -28,6 +28,8 @@ pipeline {
         string(name: 'JIRA_URL', defaultValue:"" , description: 'Jira URL')
         string(name: 'JIRA_PROJECT_KEY', defaultValue:"" , description: 'Jira Project Key')
         booleanParam(name: 'CREATE_JIRA_ISSUE', defaultValue: false, description: 'Enable Jira reporting')
+
+        // Policies setup
         booleanParam(name: 'ABORT_ON_POLICY_FAILURE', defaultValue: false, description: 'Abort Pipeline on pipeline Failure')
 
         // Debug
@@ -70,6 +72,11 @@ pipeline {
 
 
                    scan()
+
+                   // Output formats
+                   // CycloneDX 1.4
+                   convertToCycloneDX()
+
                    copyleftPolicyCheck()
                    undeclaredComponentsPolicyCheck()
                    echo "[ Copyleft status ]: ${env.COPYLEFT_POLICY_STATUS}"
@@ -297,6 +304,38 @@ def scan() {
 
             uploadArtifact(env.SCANOSS_RESULTS_OUTPUT_FILE_NAME)
         }
+    }
+}
+
+def convertToCycloneDX() {
+    script {
+        def cmd = [
+            'scanoss-py',
+            'convert',
+            '--input',
+            env.SCANOSS_RESULTS_OUTPUT_FILE_NAME,
+            '--format',
+            'cyclonedx',
+            '--output',
+            'scanoss-cyclonedx.json'
+        ]
+
+        // Debug
+        if(params.DEBUG) {
+            cmd << "--debug"
+        }
+
+        // Execute command
+        def exitCode = sh(
+            script: cmd.join(' '),
+            returnStatus: true
+        )
+
+        if (exitCode != 0) {
+            echo "Warning: failed to convert scannos raw results to cylonedx format. Exit code ${exitCode}"
+        }
+
+        uploadArtifact(scanoss-cyclonedx.json)
     }
 }
 
