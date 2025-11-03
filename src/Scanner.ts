@@ -30,6 +30,8 @@ export class Scanner extends EventEmitter {
 
   private resultFilePath: string;
 
+
+  
   private wfpFilePath: string;
 
   private obfuscateMapFilePath: string;
