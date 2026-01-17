@@ -70,6 +70,8 @@ export class Scanner extends EventEmitter {
     this.scannerId = new Date().getTime().toString();
   }
 
+
+  
   public init() {
     this.scanFinished = false;
     this.processingNewData = false;
