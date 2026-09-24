@@ -15,13 +15,6 @@ import { Utils } from '../../Utils/Utils';
 
 
 
-
-
-
-
-
-
-
 const MAX_CONCURRENT_REQUEST = 30;
 
 export class Dispatcher extends EventEmitter {
