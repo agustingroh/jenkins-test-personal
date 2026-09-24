@@ -25,6 +25,9 @@ export class DispatchableItem {
 
   private sbom: string;
 
+
+
+  
   private sbomMode: SbomMode;
 
   private _uuid: string;
